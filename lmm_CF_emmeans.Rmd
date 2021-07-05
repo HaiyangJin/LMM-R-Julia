@@ -1,0 +1,460 @@
+---
+title: "Generalized linear mixed-effects modeling of the composite face task"
+author: "[Haiyang Jin](https://haiyangjin.github.io/)"
+date: "`r format(Sys.time(), '%d-%m-%Y')`"
+output: 
+  html_document:
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+```{r global_options, echo = FALSE, include = FALSE}
+options(width = 3000)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = TRUE,
+                      cache = FALSE, tidy = FALSE, size = "small")
+```
+
+```{r xaringanExtra-clipboard, echo=FALSE}
+xaringanExtra::use_clipboard() 
+```
+
+# Preparation
+```{r setup and load the related libraries, include=FALSE}
+library(tidyverse)
+library(hypr)
+library(MASS)
+library(lme4)
+library(lmerTest)
+library(optimx)
+library(emmeans)
+
+# set the contrast coding
+options(contrasts = rep("contr.sdif", 2))
+```
+
+## Brief introduction
+The data was a subset of [one previous study](https://psyarxiv.com/j8g6z/) where data was analyzed with repeated-measures ANOVA. The independent variables are:
+  
++ Condition: monocular (**O**) vs. CFS (**F**)  
++ Congruency: congruent (**C**) vs. incongruent (**I**)  
++ Alignment: aligned (**A**) vs. misaligned (**M**)  
++ answer: same (**S**) vs. different (**D**) (used as `signal` and `noise` in Signal Detection Theory)  
+
+The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times will be analyzed with lognormal transformation.
+
+The main research questions are: 
+(1) whether there is composite face effect in the `CFS` condition;
+(2) whether there is composite face effect in the `monocular` condition;
+(3) whether the composite face effect is larger in the `monocular` relative to the `CFS` condition. 
+
+As discussed [earlier](https://psyarxiv.com/yhmzg/), we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
+
+Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]). 
+
+## Prepare data
+Load and set the default levels for the factors:
+```{r read the data file}
+folder_out <- "output"
+
+df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
+  mutate(Condition = factor(Condition, levels = c("monocular", "CFS")),
+         Congruency = factor(Congruency, levels = c("congruent", "incongruent")),
+         Alignment = factor(Alignment, levels = c("aligned", "misaligned")),
+         answer = factor(answer, levels = c("same", "different")))
+head(df_raw)
+```
+
+```{r}
+# create new variables for each parameter
+df_emm <- df_raw %>% 
+  model.matrix(~ Condition * Congruency * Alignment * answer, .) %>% 
+  as_tibble() %>% 
+  transmute(Cond_main = `ConditionCFS-monocular`,
+            Cong_main = `Congruencyincongruent-congruent`,
+            Ali_main = `Alignmentmisaligned-aligned`,
+            Ans_main = `answerdifferent-same`,
+            Cond_Cong = `ConditionCFS-monocular:Congruencyincongruent-congruent`,
+            Cond_Ali = `ConditionCFS-monocular:Alignmentmisaligned-aligned`,
+            Cong_Ali = `Congruencyincongruent-congruent:Alignmentmisaligned-aligned`,
+            Cond_Ans = `ConditionCFS-monocular:answerdifferent-same`,
+            Cong_Ans = `Congruencyincongruent-congruent:answerdifferent-same`,
+            Ali_Ans = `Alignmentmisaligned-aligned:answerdifferent-same`,
+            Cond_Cong_Ali = `ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned`,
+            Cond_Cong_Ans = `ConditionCFS-monocular:Congruencyincongruent-congruent:answerdifferent-same`,
+            Cond_Ali_Ans = `ConditionCFS-monocular:Alignmentmisaligned-aligned:answerdifferent-same`,
+            Cong_Ali_Ans = `Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`,
+            Cond_Cong_Ali_Ans = `ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`
+            ) %>% 
+  cbind(df_raw, .)
+```
+
+
+# GLMM with probit link
+Analyze the sensitivity d'.
+
+## Fitting the glmm
+
+### The maximal model
+```{r resp max d }
+# file_resp_max <- file.path(folder_out, "Resp_lmm_emm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_resp_max)) {
+#   glmm_resp_max <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+#                            (Cond_main + Cong_main + Ali_main + Ans_main + 
+#                               Cond_Cong + Cond_Ali + Cong_Ali + Cond_Ans + Cong_Ans + Ali_Ans +
+#                               Cond_Cong_Ali + Cond_Cong_Ans + Cond_Ali_Ans + Cong_Ali_Ans +
+#                               Cond_Cong_Ali_Ans | Participant),
+#                          family = binomial(link = "probit"),
+#                          data = df_emm,
+#                          control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                                                 optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+#   
+#   save(glmm_resp_max, file = file_resp_max)
+# } else {
+#   load(file_resp_max)
+# }
+# 
+# print(summary(glmm_resp_max), corr = FALSE)
+```
+
+### The zero-correlation-parameter model
+```{r resp zcp }
+
+file_resp_zcp <- file.path(folder_out, "Resp_lmm_emm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_resp_zcp)) {
+  glmm_resp_zcp <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+                           (Cond_main + Cong_main + Ali_main + Ans_main +
+                              Cond_Cong + Cond_Ali + Cong_Ali + Cond_Ans + Cong_Ans + Ali_Ans +
+                              Cond_Cong_Ali + Cond_Cong_Ans + Cond_Ali_Ans + Cong_Ali_Ans +
+                              Cond_Cong_Ali_Ans || Participant),
+                         family = binomial(link = "probit"),
+                         data = df_emm,
+                         control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                                optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp_zcp, file = file_resp_zcp)
+} else {
+  load(file_resp_zcp)
+}
+
+print(summary(glmm_resp_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for resp zcp lmm }
+summary(rePCA(glmm_resp_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r resp rdc }
+file_resp_rdc <- file.path(folder_out, "Resp_lmm_emm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_resp_rdc)) {
+  glmm_resp_rdc <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+                           (Cond_main + Cong_main + Ali_main + Ans_main +
+                              Cond_Ali + Cond_Ans + Cong_Ans + Ali_Ans + # Cond_Cong + Cong_Ali + 
+                              Cond_Cong_Ali + Cong_Ali_Ans # +  Cond_Cong_Ans + Cond_Ali_Ans + 
+                               || Participant), # Cond_Cong_Ali_Ans
+                         family = binomial(link = "probit"),
+                         data = df_emm,
+                         control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                                optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp_rdc, file = file_resp_rdc)
+} else {
+  load(file_resp_rdc)
+}
+
+print(summary(glmm_resp_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r resp etd }
+file_resp_etd <- file.path(folder_out, "Resp_lmm_emm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_resp_etd)) {
+  glmm_resp_etd <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+                           (Cond_main + Cong_main + Ali_main + Ans_main +
+                              Cond_Ali + Cond_Ans + Cong_Ans + Ali_Ans + # Cond_Cong + Cong_Ali + 
+                              Cond_Cong_Ali + Cong_Ali_Ans # +  Cond_Cong_Ans + Cond_Ali_Ans + 
+                               | Participant), # Cond_Cong_Ali_Ans
+                         family = binomial(link = "probit"),
+                         data = df_emm,
+                         control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                                optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp_etd, file = file_resp_etd)
+} else {
+  load(file_resp_etd)
+}
+
+print(summary(glmm_resp_etd), corr = FALSE)
+```
+
+```{r}
+summary(rePCA(glmm_resp_etd))
+```
+
+Random effect that explained less than 1% variances were removed from the etd model, resulting in another extended model (`etd1`). Not quite sure how I should remove the random effects.
+
+```{r resp etd1 }
+file_resp_etd1 <- file.path(folder_out, "Resp_lmm_emm_etd1.RData")
+
+# fit the etd1 model
+if (!file.exists(file_resp_etd1)) {
+  glmm_resp_etd1 <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+                           (Ans_main + # Cong_main + Cond_main + Ali_main + 
+                              Cond_Ans + # Cond_Cong + Cong_Ali + Cond_Ali + Cong_Ans + Ali_Ans + 
+                              Cond_Cong_Ali + Cong_Ali_Ans # +  Cond_Cong_Ans + Cond_Ali_Ans + 
+                               | Participant), # Cond_Cong_Ali_Ans
+                         family = binomial(link = "probit"),
+                         data = df_emm,
+                         control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                                optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp_etd1, file = file_resp_etd1)
+} else {
+  load(file_resp_etd1)
+}
+
+print(summary(glmm_resp_etd1), corr = FALSE)
+
+```
+
+```{r}
+summary(rePCA(glmm_resp_etd1))
+```
+
+```{r resp etd2 }
+file_resp_etd2 <- file.path(folder_out, "Resp_lmm_emm_etd2.RData")
+
+# fit the etd2 model
+if (!file.exists(file_resp_etd2)) {
+  glmm_resp_etd2 <- glmer(resp ~ Condition * Congruency * Alignment * answer +
+                           (0 + Ans_main + # Cong_main + Cond_main + Ali_main + 
+                              Cond_Ans + # Cond_Cong + Cong_Ali + Cond_Ali + Cong_Ans + Ali_Ans + 
+                              Cong_Ali_Ans # +  Cond_Cong_Ans + Cond_Ali_Ans + Cond_Cong_Ali + 
+                               | Participant), # Cond_Cong_Ali_Ans
+                         family = binomial(link = "probit"),
+                         data = df_emm,
+                         control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                                optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp_etd2, file = file_resp_etd2)
+} else {
+  load(file_resp_etd2)
+}
+
+print(summary(glmm_resp_etd2), corr = FALSE)
+```
+
+Though `glmm_resp_etd2` does not converge, the `glmm_resp_rdc` already explains the data better (than `glmm_resp_etd2`).
+
+### The optimal model
+```{r comapre etd and rdc  d}
+# compare the extended and reduced model
+anova(glmm_resp_etd2, glmm_resp_rdc, refit = FALSE)
+```
+
+```{r the optimal model  d}
+glmm_resp_opt <- glmm_resp_rdc
+
+print(summary(glmm_resp_opt), corr = FALSE)
+```
+Follow-up comparisons were based on the optimal model. 
+
+## Comparisons
+
+```{r}
+emm_resp <- emmeans(glmm_resp_opt, ~ Condition * Congruency * Alignment * answer)
+```
+
+sensitivity d' ($Z_{same}$ - $Z_{different}$) in congruent vs. incongruent for aligned faces (i.e., the interaction between Congruency and Answer)
+```{r}
+# do not need back-transformed
+(resp_2inter <- contrast(emm_resp, interaction="pairwise", by = c("Condition", "Alignment"))[c(1,2)])
+```
+
+composite face effect in sensitivity d' (i.e., the interaction between Congruency, Alignment and Answer)
+```{r}
+# do not need back-transformed
+(resp_3inter <- contrast(emm_resp, interaction="pairwise", by = c("Condition"))[c(1,2)])
+```
+
+Compare the composite face effect between monocluar and CFS
+```{r}
+(resp_4inter <- contrast(emm_resp, interaction="pairwise"))
+```
+
+## Summary
+
+```{r}
+resp_2inter[1]
+resp_3inter[1]
+```
+With the above evidence of responses, we may claim that (1) composite face effect was observed in the monocular condition. 
+
+```{r}
+resp_4inter
+```
+With all above evidence of responses, we may claim (2) the composite face effect was larger in the monocular relative to the CFS condition.
+
+
+# Lognormal
+Analyze response times of correct trials with lognormal transformation.
+
+## Fitting the glmm
+### The maximal model
+```{r  rt max}
+# file_rt_max <- file.path(folder_out, "RT_lmm_emm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_rt_max)) {
+#   lmm_rt_max <- lmer(log(RT) ~ Condition * Congruency * Alignment +
+#                           (Cond_main + Cong_main + Ali_main + 
+#                              Cond_Cong + Cond_Ali + Cong_Ali + 
+#                              Cond_Cong_Ali | Participant),
+#                         data = filter(df_emm, isCorrect==1),
+#                         control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                                               optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+# 
+#   save(lmm_rt_max, file = file_rt_max)
+# } else {
+#   load(file_rt_max)
+# }
+# 
+# print(summary(lmm_rt_max), corr = FALSE)
+```
+
+
+### The zero-correlation-parameter model
+```{r  rt zcp}
+file_rt_zcp <- file.path(folder_out, "RT_lmm_emm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_rt_zcp)) {
+  lmm_rt_zcp <- lmer(log(RT) ~ Condition * Congruency * Alignment +
+                          (Cond_main + Cong_main + Ali_main +
+                             Cond_Cong + Cond_Ali + Cong_Ali +
+                             Cond_Cong_Ali || Participant),
+                        data = filter(df_emm, isCorrect==1),
+                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt_zcp, file = file_rt_zcp)
+} else {
+  load(file_rt_zcp)
+}
+
+print(summary(lmm_rt_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for rt zcp lmm }
+summary(rePCA(lmm_rt_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r  rt rdc}
+file_rt_rdc <- file.path(folder_out, "RT_lmm_emm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_rt_rdc)) {
+  lmm_rt_rdc <- lmer(log(RT) ~ Condition * Congruency * Alignment +
+                          (Cond_main + # + Cong_main + Ali_main +
+                              Cond_Ali # + Cond_Cong + Cong_Ali +
+                             || Participant), # Cond_Cong_Ali 
+                        data = filter(df_emm, isCorrect==1),
+                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt_rdc, file = file_rt_rdc)
+} else {
+  load(file_rt_rdc)
+}
+
+print(summary(lmm_rt_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r  rt etd}
+file_rt_etd <- file.path(folder_out, "RT_lmm_emm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_rt_etd)) {
+  lmm_rt_etd <- lmer(log(RT) ~ Condition * Congruency * Alignment +
+                          (Cond_main + # + Cong_main + Ali_main +
+                              Cond_Ali # + Cond_Cong + Cong_Ali +
+                             | Participant), # Cond_Cong_Ali 
+                        data = filter(df_emm, isCorrect==1),
+                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt_etd, file = file_rt_etd)
+} else {
+  load(file_rt_etd)
+}
+
+print(summary(lmm_rt_etd), corr = FALSE)
+```
+
+### The optimal model
+```{r  comapre rt etd and rdc}
+# compare the extended and reduced model
+anova(lmm_rt_etd, lmm_rt_rdc, refit = FALSE)
+```
+
+
+```{r  the optimal model rt}
+lmm_rt_opt <- lmm_rt_rdc
+
+print(summary(lmm_rt_opt), corr = FALSE)
+```
+
+## Comparisons
+```{r}
+emm_rt <- emmeans(lmm_rt_opt, ~ Condition * Congruency * Alignment, lmer.df = "satterthwaite", 
+                  pbkrtest.limit = 12800, lmerTest.limit = 12800)
+```
+
+
+```{r}
+(rt_sim <- contrast(emm_rt, "pairwise", simple="Congruency")[c(1,2)])
+```
+
+```{r}
+(rt_2inter <- contrast(emm_rt, interaction="pairwise", by="Condition")[c(1,2)])
+```
+
+```{r}
+(rt_3inter <- contrast(emm_rt, interaction="pairwise"))
+```
+
+## Summary
+With the above evidence of response times, (1) we failed to observe the evidence for composite face effect in any condition. Also, (2) no evidence was found that the composite face effect differed between the monocular and CFS conditions.
+
+
+# Session information {.unlisted .unnumbered}
+```{r}
+sessionInfo()
+```
+
+
