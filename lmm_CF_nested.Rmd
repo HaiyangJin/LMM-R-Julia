@@ -1,0 +1,835 @@
+---
+title: "Generalized linear mixed-effects modeling of the composite face task"
+author: "[Haiyang Jin](https://haiyangjin.github.io/)"
+date: "`r format(Sys.time(), '%d-%m-%Y')`"
+output: 
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+```{r global_options, echo = FALSE, include = FALSE}
+options(width = 2000)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = TRUE,
+                      cache = FALSE, tidy = FALSE, size = "small")
+```
+
+# Preparation
+```{r setup and load the related libraries, include=FALSE}
+library(tidyverse)
+library(hypr)
+library(MASS)
+library(lme4)
+library(lmerTest)
+library(optimx)
+library(emmeans)
+
+# set the contrast coding
+options(contrasts = rep("contr.sdif", 2))
+```
+
+## Prepare data
+```{r read the data file}
+# backup codes
+# df_tmp <- read_csv(file.path("data", "example.csv")) %>%
+#   transmute(Participant = as_factor(Participant),
+#             Condition = if_else(substr(Experiment,1,3)=="104", "CFS", "monocular"),
+#             Congruency = if_else(Congruency=="C", "congruent", "incongruent"),
+#             Alignment = if_else(Alignment=="A", "aligned", "misaligned"),
+#             answer = if_else(SameDifferent=="S", "same", "different"),
+#             resp = if_else(thisResponse=="S", 1, 0),
+#             isCorrect = isCorrect,
+#             RT = round(reactionTime*1000+200)) %>%
+#   mutate(Participant = sprintf("Subj%02d", as.numeric(Participant)))
+# write_csv(df_tmp, file = file.path("data", "example_data.csv"))
+
+folder_out <- "output"
+
+df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
+  mutate(Condition = if_else(Condition=="monocular", "mon", Condition),
+         Congruency = if_else(Congruency=="congruent", "con", "inc"),
+         Alignment = if_else(Alignment=="aligned", "ali", "mis"),
+         answer = if_else(answer=="same", "sam", "dif"),
+         Condition = factor(Condition, levels=c("CFS", "mon")),
+         Congruency = factor(Congruency, levels=c("inc", "con")),
+         Alignment = factor(Alignment, levels=c("mis", "ali")))
+head(df_raw)
+```
+
+## Brief introduction
+The data was a subset of [one previous study](https://psyarxiv.com/j8g6z/) where data was analyzed with repeated-measures ANOVA. The independent variables are:
+  
++ Condition: monocular (**O**) vs. CFS (**F**)  
++ Congruency: congruent (**C**) vs. incongruent (**I**)  
++ Alignment: aligned (**A**) vs. misaligned (**M**)  
++ answer: same (**S**) vs. different (**D**) (used as `signal` and `noise` in Signal Detection Theory)  
+
+The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times will be analyzed with lognormal transformation.
+
+The main research questions are: 
+(1) whether there is composite face effect in the `CFS` condition;
+(2) whether there is composite face effect in the `monocular` condition;
+(3) whether the composite face effect is larger in the `monocular` relative to the `CFS` condition. 
+
+As discussed [earlier](https://psyarxiv.com/yhmzg/), we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
+
+Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]). 
+
+
+# GLMM with probit link
+sensitivity d'
+
+## lmm for simple effects of Congruency 
+It is also testing the interaction between Congruency and Answer.
+```{r}
+df_resp_2inter <- model.matrix(~ Condition * Alignment / Congruency * answer, df_raw) %>% 
+  as_tibble() %>% 
+  cbind(df_raw, .)
+```
+
+### The maximal model
+```{r resp1 max d }
+# file_resp1_max <- file.path(folder_out, "Resp1_lmm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_resp1_max)) {
+#   glmm_resp1_max <- glmer(resp ~ Condition * Alignment / Congruency * answer +
+#                            (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
+#                               `Conditionmon-CFS:Alignmentali-mis` +
+#                               `Conditionmon-CFS:answersam-dif` +
+#                               `Alignmentali-mis:answersam-dif` +
+#                               `ConditionCFS:Alignmentali:Congruencycon-inc` +
+#                               `Conditionmon:Alignmentali:Congruencycon-inc` +
+#                               `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+#                               `Conditionmon:Alignmentmis:Congruencycon-inc` +
+#                               `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
+#                               `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+#                               `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+#                               `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
+#                               `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif`
+#                               | Participant),
+#     family = binomial(link = "probit"),
+#     data = df_resp_2inter,
+#     control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+# 
+#   save(glmm_resp1_max, file = file_resp1_max)
+# } else {
+#   load(file_resp1_max)
+# }
+# 
+# print(summary(glmm_resp1_max), corr = FALSE)
+```
+
+### The zero-correlation-parameter model
+```{r resp1 zcp d }
+file_resp1_zcp <- file.path(folder_out, "Resp1_lmm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_resp1_zcp)) {
+  glmm_resp1_zcp <- glmer(resp ~ Condition * Alignment / Congruency * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` + 
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Alignmentali:Congruencycon-inc` +
+                              `Conditionmon:Alignmentali:Congruencycon-inc` +
+                              `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+                              `Conditionmon:Alignmentmis:Congruencycon-inc` +
+                              `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
+                              `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif` 
+                              || Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_2inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp1_zcp, file = file_resp1_zcp)
+} else {
+  load(file_resp1_zcp)
+}
+
+print(summary(glmm_resp1_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for resp1 zcp lmm }
+summary(rePCA(glmm_resp1_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r resp1 rdc d }
+file_resp1_rdc <- file.path(folder_out, "Resp1_lmm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_resp1_rdc)) {
+  glmm_resp1_rdc <- glmer(resp ~ Condition * Alignment / Congruency * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` + 
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Alignmentali:Congruencycon-inc` +
+                              # `Conditionmon:Alignmentali:Congruencycon-inc` +
+                              `ConditionCFS:Alignmentmis:Congruencycon-inc` # +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc` +
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
+                              # `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif` 
+                              || Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_2inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp1_rdc, file = file_resp1_rdc)
+} else {
+  load(file_resp1_rdc)
+}
+
+print(summary(glmm_resp1_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r resp1 etd d }
+file_resp1_etd <- file.path(folder_out, "Resp1_lmm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_resp1_etd)) {
+  glmm_resp1_etd <- glmer(resp ~ Condition * Alignment / Congruency * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` + 
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Alignmentali:Congruencycon-inc` +
+                              # `Conditionmon:Alignmentali:Congruencycon-inc` +
+                              `ConditionCFS:Alignmentmis:Congruencycon-inc` # +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc` +
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
+                              # `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif` 
+                              | Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_2inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp1_etd, file = file_resp1_etd)
+} else {
+  load(file_resp1_etd)
+}
+
+print(summary(glmm_resp1_etd), corr = FALSE)
+```
+
+```{r}
+summary(rePCA(glmm_resp1_etd))
+```
+
+```{r resp1 etd1 d }
+file_resp1_etd1 <- file.path(folder_out, "Resp1_lmm_etd1.RData")
+
+# fit the etd1 model
+if (!file.exists(file_resp1_etd1)) {
+  glmm_resp1_etd1 <- glmer(resp ~ Condition * Alignment / Congruency * answer +
+                           (`Conditionmon-CFS` + `answersam-dif` + # `Alignmentali-mis` + 
+                              # `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` # +
+                              # `Alignmentali-mis:answersam-dif` +
+                              # `ConditionCFS:Alignmentali:Congruencycon-inc` +
+                              # `Conditionmon:Alignmentali:Congruencycon-inc` +
+                              # `ConditionCFS:Alignmentmis:Congruencycon-inc` # +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc` +
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
+                              # `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
+                              # `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
+                              # `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif` 
+                              | Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_2inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp1_etd1, file = file_resp1_etd1)
+} else {
+  load(file_resp1_etd1)
+}
+
+print(summary(glmm_resp1_etd1), corr = FALSE)
+```
+
+
+### The optimal model
+```{r comapre etd and rdc resp1 d}
+# compare the extended and reduced model
+anova(glmm_resp1_etd1, glmm_resp1_rdc, refit = FALSE)
+```
+
+
+```{r the optimal model resp1 d}
+glmm_resp1_opt <- glmm_resp1_etd1
+
+print(summary(glmm_resp1_opt), corr = FALSE)
+```
+The above results (the third last row) showed that the sensitivity d' is larger for congruent relative to incongruent trials for aligned faces in the monocular condition. 
+
+## lmm for simple effects of Congruency 
+It is also testing the interaction between Congruency and Answer.
+```{r}
+df_resp_3inter <- model.matrix(~ Condition / Congruency * Alignment  * answer, df_raw) %>% 
+  as_tibble() %>% 
+  cbind(df_raw, .)
+```
+
+### The maximal model
+```{r resp2 max d }
+# file_resp2_max <- file.path(folder_out, "Resp2_lmm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_resp2_max)) {
+#   glmm_resp2_max <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+#                            (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
+#                               `ConditionCFS:Congruencycon-inc` +
+#                               `Conditionmon:Congruencycon-inc` +
+#                               `Conditionmon-CFS:Alignmentali-mis` +
+#                               `Conditionmon-CFS:answersam-dif` +
+#                               `Alignmentali-mis:answersam-dif` +
+#                               `ConditionCFS:Congruencycon-inc:Alignmentali-mis` +
+#                               `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+#                               `ConditionCFS:Congruencycon-inc:answersam-dif` +
+#                               `Conditionmon:Congruencycon-inc:answersam-dif` + 
+#                               `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+#                               `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+#                               `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+#                               | Participant),
+#     family = binomial(link = "probit"),
+#     data = df_resp_3inter,
+#     control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+# 
+#   save(glmm_resp2_max, file = file_resp2_max)
+# } else {
+#   load(file_resp2_max)
+# }
+# 
+# print(summary(glmm_resp2_max), corr = FALSE)
+```
+
+### The zero-correlation-parameter model
+```{r resp2 zcp d }
+file_resp2_zcp <- file.path(folder_out, "Resp2_lmm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_resp2_zcp)) {
+  glmm_resp2_zcp <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc` +
+                              `Conditionmon:Congruencycon-inc` +
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis` +
+                              `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+                              `ConditionCFS:Congruencycon-inc:answersam-dif` +
+                              `Conditionmon:Congruencycon-inc:answersam-dif` + 
+                              `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+                              `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+                              || Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_3inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp2_zcp, file = file_resp2_zcp)
+} else {
+  load(file_resp2_zcp)
+}
+
+print(summary(glmm_resp2_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for resp2 zcp lmm}
+summary(rePCA(glmm_resp2_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r resp2 rdc d }
+file_resp2_rdc <- file.path(folder_out, "Resp2_lmm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_resp2_rdc)) {
+  glmm_resp2_rdc <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc` +
+                              `Conditionmon:Congruencycon-inc` +
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis` +
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+                              `ConditionCFS:Congruencycon-inc:answersam-dif` # +
+                              # `Conditionmon:Congruencycon-inc:answersam-dif` + 
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+                              # `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+                              || Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_3inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp2_rdc, file = file_resp2_rdc)
+} else {
+  load(file_resp2_rdc)
+}
+
+print(summary(glmm_resp2_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r resp2 etd d }
+file_resp2_etd <- file.path(folder_out, "Resp2_lmm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_resp2_etd)) {
+  glmm_resp2_etd <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+                           (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc` +
+                              `Conditionmon:Congruencycon-inc` +
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis` +
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+                              `ConditionCFS:Congruencycon-inc:answersam-dif` # +
+                              # `Conditionmon:Congruencycon-inc:answersam-dif` + 
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+                              # `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+                              | Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_3inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp2_etd, file = file_resp2_etd)
+} else {
+  load(file_resp2_etd)
+}
+
+print(summary(glmm_resp2_etd), corr = FALSE)
+```
+
+```{r}
+summary(rePCA(glmm_resp2_etd))
+```
+
+```{r resp2 etd1 d }
+file_resp2_etd1 <- file.path(folder_out, "Resp2_lmm_etd1.RData")
+
+# fit the etd1 model
+if (!file.exists(file_resp2_etd1)) {
+  glmm_resp2_etd1 <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+                           (`Conditionmon-CFS` + `answersam-dif` + # `Alignmentali-mis` + 
+                              # `ConditionCFS:Congruencycon-inc` +
+                              # `Conditionmon:Congruencycon-inc` +
+                              `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              # `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis` # +
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+                              # `ConditionCFS:Congruencycon-inc:answersam-dif` # +
+                              # `Conditionmon:Congruencycon-inc:answersam-dif` + 
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+                              # `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+                              | Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_3inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp2_etd1, file = file_resp2_etd1)
+} else {
+  load(file_resp2_etd1)
+}
+
+print(summary(glmm_resp2_etd1), corr = FALSE)
+```
+```{r}
+summary(rePCA(glmm_resp2_etd1))
+```
+
+```{r resp2 etd2 d }
+file_resp2_etd2 <- file.path(folder_out, "Resp2_lmm_etd2.RData")
+
+# fit the etd2 model
+if (!file.exists(file_resp2_etd2)) {
+  glmm_resp2_etd2 <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
+                           (`answersam-dif` + # `Alignmentali-mis` +`Conditionmon-CFS` + 
+                              # `ConditionCFS:Congruencycon-inc` +
+                              # `Conditionmon:Congruencycon-inc` +
+                              # `Conditionmon-CFS:Alignmentali-mis` +
+                              `Conditionmon-CFS:answersam-dif` +
+                              # `Alignmentali-mis:answersam-dif` +
+                              `ConditionCFS:Congruencycon-inc:Alignmentali-mis` # +
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
+                              # `ConditionCFS:Congruencycon-inc:answersam-dif` # +
+                              # `Conditionmon:Congruencycon-inc:answersam-dif` + 
+                              # `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
+                              # `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
+                              # `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
+                              | Participant),
+    family = binomial(link = "probit"),
+    data = df_resp_3inter,
+    control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(glmm_resp2_etd2, file = file_resp2_etd2)
+} else {
+  load(file_resp2_etd2)
+}
+
+print(summary(glmm_resp2_etd2), corr = FALSE)
+```
+
+Though `glmm_resp2_etd2` does not converge, the `glmm_resp2_rdc` already explains the data better (than `glmm_resp2_etd2`).
+
+### The optimal model
+```{r comapre etd and rdc resp2 d}
+# compare the extended and reduced model
+anova(glmm_resp2_etd2, glmm_resp2_rdc, refit = FALSE)
+```
+
+
+```{r the optimal model resp2 d}
+glmm_resp2_opt <- glmm_resp2_rdc
+
+print(summary(glmm_resp2_opt), corr = FALSE)
+```
+The above results (the last row) showed that in the monocular condition, sensitivity d' difference between congruent and incongruent trials was larger for aligned relative to misaligned faces.  
+
+## lmm for comparing composite effects in CFS and monocular conditions
+This analysis will not be repeated; it is the same as that used in `lmm_CF_emmeans.Rmd` file (around Line 276). 
+
+In short, we observed that the composite effect was larger in the monocular relative to CFS condition.
+
+## Summary
+With the above three glmm, we observed (1) composite face effect in the monocular condition and (2) it was larger than that in the CFS condition.
+
+# Lognormal
+
+```{r}
+# make the level names shorter
+df_rt <- df_raw %>% 
+  filter(isCorrect == 1)
+```
+
+
+## lmm for simple effects of Congruency 
+```{r}
+df_rt_sim <- model.matrix(~ Condition * Alignment / Congruency, df_rt) %>% 
+  as_tibble() %>% 
+  cbind(df_rt, .)
+```
+### The maximal model
+```{r rt1 max}
+# file_rt1_max <- file.path(folder_out, "RT1_lmm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_rt1_max)) {
+#   lmm_rt1_max <- lmer(log(RT) ~ Condition * Alignment / Congruency +
+#                         (`Conditionmon-CFS` + `Alignmentali-mis` + 
+#                            `Conditionmon-CFS:Alignmentali-mis` +
+#                            `ConditionCFS:Alignmentali:Congruencycon-inc` + # interest
+#                            `Conditionmon:Alignmentali:Congruencycon-inc` + # interest
+#                            `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+#                            `Conditionmon:Alignmentmis:Congruencycon-inc`
+#                          | Participant),
+#                       data = df_rt_sim,
+#                       control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                                             optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+# 
+#   save(lmm_rt1_max, file = file_rt1_max)
+# } else {
+#   load(file_rt1_max)
+# }
+# 
+# print(summary(lmm_rt1_max), corr = FALSE)
+```
+
+### The zero-correlation-parameter model
+```{r rt1 zcp}
+file_rt1_zcp <- file.path(folder_out, "RT1_lmm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_rt1_zcp)) {
+  lmm_rt1_zcp <- lmer(log(RT) ~ Condition * Alignment / Congruency +
+                        (`Conditionmon-CFS` + `Alignmentali-mis` + 
+                           `Conditionmon-CFS:Alignmentali-mis` +
+                           `ConditionCFS:Alignmentali:Congruencycon-inc` + # interest
+                           `Conditionmon:Alignmentali:Congruencycon-inc` + # interest
+                           `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+                           `Conditionmon:Alignmentmis:Congruencycon-inc`
+                         || Participant),
+                      data = df_rt_sim,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt1_zcp, file = file_rt1_zcp)
+} else {
+  load(file_rt1_zcp)
+}
+
+print(summary(lmm_rt1_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for rt1 zcp lmm }
+summary(rePCA(lmm_rt1_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r  rt1 rdc}
+file_rt1_rdc <- file.path(folder_out, "RT1_lmm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_rt1_rdc)) {
+  lmm_rt1_rdc <- lmer(log(RT) ~ Condition * Alignment / Congruency +
+                        (`Conditionmon-CFS` + # `Alignmentali-mis` + 
+                           `Conditionmon-CFS:Alignmentali-mis` # +
+                           # `ConditionCFS:Alignmentali:Congruencycon-inc` + # interest
+                           # `Conditionmon:Alignmentali:Congruencycon-inc` + # interest
+                           # `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+                           # `Conditionmon:Alignmentmis:Congruencycon-inc`
+                         || Participant),
+                      data = df_rt_sim,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt1_rdc, file = file_rt1_rdc)
+} else {
+  load(file_rt1_rdc)
+}
+
+print(summary(lmm_rt1_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r  rt1 etd}
+file_rt1_etd <- file.path(folder_out, "RT1_lmm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_rt1_etd)) {
+  lmm_rt1_etd <- lmer(log(RT) ~ Condition * Alignment / Congruency +
+                        (`Conditionmon-CFS` + # `Alignmentali-mis` + 
+                           `Conditionmon-CFS:Alignmentali-mis` # +
+                           # `ConditionCFS:Alignmentali:Congruencycon-inc` + # interest
+                           # `Conditionmon:Alignmentali:Congruencycon-inc` + # interest
+                           # `ConditionCFS:Alignmentmis:Congruencycon-inc` +
+                           # `Conditionmon:Alignmentmis:Congruencycon-inc`
+                         | Participant),
+                      data = df_rt_sim,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt1_etd, file = file_rt1_etd)
+} else {
+  load(file_rt1_etd)
+}
+
+print(summary(lmm_rt1_etd), corr = FALSE)
+```
+
+
+### The optimal model
+```{r  comapre rt1 etd and rdc}
+# compare the extended and reduced model
+anova(lmm_rt1_etd, lmm_rt1_rdc, refit = FALSE)
+```
+
+```{r  the optimal model rt1}
+lmm_rt1_opt <- lmm_rt1_rdc
+
+print(summary(lmm_rt1_opt), corr = FALSE)
+```
+Results showed (the last row) that response times were shorter on congruent trials than incongruent trials for aligned faces in the monocular condition.
+
+
+## lmm for composite effects in CFS and monocular conditions
+```{r}
+df_rt_cf <- model.matrix(~ Condition / Congruency * Alignment, df_rt) %>% 
+  as_tibble() %>% 
+  cbind(df_rt, .)
+```
+
+### The maximal model
+```{r rt2 max}
+# file_rt2_max <- file.path(folder_out, "RT2_lmm_max.RData")
+# 
+# # fit the max model
+# if (!file.exists(file_rt2_max)) {
+#   lmm_rt2_max <- lmer(log(RT) ~ Condition / Congruency * Alignment +
+#                         (`Conditionmon-CFS` + `Alignmentali-mis` +
+#                            `ConditionCFS:Congruencycon-inc` +
+#                            `Conditionmon:Congruencycon-inc` +
+#                            `Conditionmon-CFS:Alignmentali-mis` +
+#                            `ConditionCFS:Congruencycon-inc:Alignmentali-mis` + # interest
+#                            `Conditionmon:Congruencycon-inc:Alignmentali-mis`  # interest
+#                          | Participant),
+#                       data = df_rt_cf,
+#                       control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+#                                             optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+#   )
+# 
+#   save(lmm_rt2_max, file = file_rt2_max)
+# } else {
+#   load(file_rt2_max)
+# }
+# 
+# print(summary(lmm_rt2_max), corr = FALSE)
+```
+
+### The zero-correlation-parameter model
+```{r rt2 zcp}
+file_rt2_zcp <- file.path(folder_out, "RT2_lmm_zcp.RData")
+
+# fit the zcp model
+if (!file.exists(file_rt2_zcp)) {
+  lmm_rt2_zcp <- lmer(log(RT) ~ Condition / Congruency * Alignment +
+                        (`Conditionmon-CFS` + `Alignmentali-mis` +
+                           `ConditionCFS:Congruencycon-inc` +
+                           `Conditionmon:Congruencycon-inc` +
+                           `Conditionmon-CFS:Alignmentali-mis` +
+                           `ConditionCFS:Congruencycon-inc:Alignmentali-mis` + # interest
+                           `Conditionmon:Congruencycon-inc:Alignmentali-mis`  # interest
+                         || Participant),
+                      data = df_rt_cf,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt2_zcp, file = file_rt2_zcp)
+} else {
+  load(file_rt2_zcp)
+}
+
+print(summary(lmm_rt2_zcp), corr = FALSE)
+```
+
+### The reduced model
+```{r PCA analysis for rt2 zcp lmm }
+summary(rePCA(lmm_rt2_zcp))
+```
+
+Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+
+```{r  rt2 rdc}
+file_rt2_rdc <- file.path(folder_out, "RT2_lmm_rdc.RData")
+
+# fit the rdc model
+if (!file.exists(file_rt2_rdc)) {
+  lmm_rt2_rdc <- lmer(log(RT) ~ Condition / Congruency * Alignment +
+                        (`Conditionmon-CFS` + # `Alignmentali-mis` +
+                           # `ConditionCFS:Congruencycon-inc` +
+                           # `Conditionmon:Congruencycon-inc` +
+                           `Conditionmon-CFS:Alignmentali-mis` # +
+                           # `ConditionCFS:Congruencycon-inc:Alignmentali-mis` + # interest
+                           # `Conditionmon:Congruencycon-inc:Alignmentali-mis`  # interest
+                         || Participant),
+                      data = df_rt_cf,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+  save(lmm_rt2_rdc, file = file_rt2_rdc)
+} else {
+  load(file_rt2_rdc)
+}
+
+print(summary(lmm_rt2_rdc), corr = FALSE)
+```
+
+### The extended model
+```{r  rt2 etd}
+file_rt2_etd <- file.path(folder_out, "RT2_lmm_etd.RData")
+
+# fit the etd model
+if (!file.exists(file_rt2_etd)) {
+  lmm_rt2_etd <- lmer(log(RT) ~ Condition / Congruency * Alignment +
+                        (`Conditionmon-CFS` + # `Alignmentali-mis` +
+                           # `ConditionCFS:Congruencycon-inc` +
+                           # `Conditionmon:Congruencycon-inc` +
+                           `Conditionmon-CFS:Alignmentali-mis` # +
+                           # `ConditionCFS:Congruencycon-inc:Alignmentali-mis` + # interest
+                           # `Conditionmon:Congruencycon-inc:Alignmentali-mis`  # interest
+                         | Participant),
+                      data = df_rt_cf,
+                      control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+  )
+
+
+  save(lmm_rt2_etd, file = file_rt2_etd)
+} else {
+  load(file_rt2_etd)
+}
+
+print(summary(lmm_rt2_etd), corr = FALSE)
+```
+
+### The optimal model
+```{r  comapre rt2 etd and rdc}
+# compare the extended and reduced model
+anova(lmm_rt2_etd, lmm_rt2_rdc, refit = FALSE)
+```
+
+```{r  the optimal model rt2}
+lmm_rt2_opt <- lmm_rt2_rdc
+
+print(summary(lmm_rt2_opt), corr = FALSE)
+```
+Results showed that the interaction between Congruency and Alignment of response times was found in the CFS, but not the monocular condition. 
+
+## lmm for comparing composite effects in CFS and monocular conditions
+This analysis will not be repeated; it is the same as that used in `lmm_CF_emmeans.Rmd` file (around Line 430). 
+
+In short, we failed to observe the evidence that the composite effects differed between monocular and CFS condition.
+
+## Summary
+With the above three glmm, we failed to observed the composite face effect in the either condition or the differences of composite face effect between the monocular and CFS condition.
+
+# Session information {.unlisted .unnumbered}
+```{r}
+sessionInfo()
+```
+
