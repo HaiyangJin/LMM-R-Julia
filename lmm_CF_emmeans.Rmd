@@ -4,6 +4,7 @@ author: "[Haiyang Jin](https://haiyangjin.github.io/)"
 date: "`r format(Sys.time(), '%d-%m-%Y')`"
 output: 
   html_document:
+    code_folding: hide
     number_sections: true
     toc: true
     toc_float: true
