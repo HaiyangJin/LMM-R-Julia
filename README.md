@@ -3,7 +3,7 @@ This repository stores RMarkdown files analyzing the composite face task with di
 <br>
 
 # Brief introduction
-The data were a subset of [one previous study](https://psyarxiv.com/j8g6z/){target="_blank"} where data were analyzed with repeated-measures ANOVA. The independent variables are:
+The data were a subset of <a href="https://psyarxiv.com/j8g6z/" target="_blank">one previous study</a> where data were analyzed with repeated-measures ANOVA. The independent variables are:
 
 Independent variables:
 + Condition: `monocular` (**O**) vs. `CFS` (**F**)  
@@ -15,7 +15,7 @@ Dependent variables:
 + Sensitivity d' (logistic regression with `probit` link)
 + Correct response times (`lognormal` transformation)
 
-As discussed [earlier](https://psyarxiv.com/yhmzg/){target="_blank"}, we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
+As discussed <a href="https://psyarxiv.com/yhmzg/" target="_blank">earlier</a>, we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
 
 Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]). 
 
@@ -31,9 +31,9 @@ In summary, the effects of interest in this study are:
 # Analyses
 There are three RMarkdown files that analyze the composite face task with (generalized) linear mixed-effects models (using `library(lme4)`):
 
-- [lmm_CF_emmeans.rmd](./lmm_CF_emmeans.rmd)
-- [lmm_CF_nested.rmd](./lmm_CF_nested.rmd)
-- [lmm_CF_priori.rmd](./lmm_CF_priori.rmd)
+- [lmm_CF_emmeans.Rmd](./lmm_CF_emmeans.Rmd)
+- [lmm_CF_nested.Rmd](./lmm_CF_nested.Rmd)
+- [lmm_CF_priori.Rmd](./lmm_CF_priori.Rmd)
 
 ## emmeans
 `lmm_CF_emmeans.rmd` creates one lmm model and then uses `library(emmeans)` to examine the effects of interest.
