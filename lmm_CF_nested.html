@@ -254,7 +254,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Generalized linear mixed-effects modeling of the composite face task</h1>
 <h4 class="author"><a href="https://haiyangjin.github.io/">Haiyang Jin</a></h4>
-<h4 class="date">06-07-2021</h4>
+<h4 class="date">22-08-2021</h4>
 
 </div>
 
@@ -276,7 +276,7 @@ div.tocify {
 #   mutate(Participant = sprintf(&quot;Subj%02d&quot;, as.numeric(Participant)))
 # write_csv(df_tmp, file = file.path(&quot;data&quot;, &quot;example_data.csv&quot;))
 
-folder_out &lt;- &quot;output&quot;
+folder_out &lt;- &quot;cache&quot;
 
 df_raw &lt;-  read_csv(file.path(&quot;data&quot;, &quot;example_data.csv&quot;)) %&gt;% 
   mutate(Condition = if_else(Condition==&quot;monocular&quot;, &quot;mon&quot;, Condition),
@@ -299,7 +299,7 @@ head(df_raw)</code></pre>
 </div>
 <div id="brief-introduction" class="section level2" number="1.2">
 <h2 number="1.2"><span class="header-section-number">1.2</span> Brief introduction</h2>
-<p>The data was a subset of <a href="https://psyarxiv.com/j8g6z/">one previous study</a> where data was analyzed with repeated-measures ANOVA. The independent variables are:</p>
+<p>The data were a subset of <a href="https://psyarxiv.com/j8g6z/" target="_blank">one previous study</a> where data were analyzed with repeated-measures ANOVA. The independent variables are:</p>
 <ul>
 <li>Condition: monocular (<strong>O</strong>) vs. CFS (<strong>F</strong>)<br />
 </li>
@@ -309,21 +309,22 @@ head(df_raw)</code></pre>
 </li>
 <li>answer: same (<strong>S</strong>) vs. different (<strong>D</strong>) (used as <code>signal</code> and <code>noise</code> in Signal Detection Theory)</li>
 </ul>
-<p>The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with <code>probit</code> link). Response times will be analyzed with lognormal transformation.</p>
-<p>The main research questions are: (1) whether there is composite face effect in the <code>CFS</code> condition; (2) whether there is composite face effect in the <code>monocular</code> condition; (3) whether the composite face effect is larger in the <code>monocular</code> relative to the <code>CFS</code> condition.</p>
-<p>As discussed <a href="https://psyarxiv.com/yhmzg/">earlier</a>, we may claim observing the composite face effect in a particular condition (e.g., <code>CFS</code> or <code>monocular</code>) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., <code>congruent_aligned</code> &gt; <code>incongruent_aligned</code>) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (<code>congruent_aligned</code> - <code>incongruent_aligned</code>) &gt; (<code>congruent_misaligned</code> - <code>incongruent_misaligned</code>)).</p>
+<p>The dependent variables are behavioral responses and response times. Behavioral responses are analyzed with signal detection theory (i.e., generalized linear mixed-effects models with <code>probit</code> link). Response times are analyzed with log-normal transformation.</p>
+<p>The main research questions are: (1) whether there is composite face effect in the <code>CFS</code> condition; (2) whether there is composite face effect in the <code>monocular</code> condition; (3) whether the composite face effect is larger in the <code>monocular</code> than the <code>CFS</code> condition.</p>
+<p>As discussed <a href="https://psyarxiv.com/yhmzg/" target="_blank">earlier</a>, we may claim observing the composite face effect in a particular condition (e.g., <code>CFS</code> or <code>monocular</code>) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., <code>congruent_aligned</code> &gt; <code>incongruent_aligned</code>) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (<code>congruent_aligned</code> - <code>incongruent_aligned</code>) &gt; (<code>congruent_misaligned</code> - <code>incongruent_misaligned</code>)).</p>
 <p>Moreover, for the third question, we also need to examine whether the composite effect in the <code>monocular</code> condition is larger than that in the <code>CFS</code> condition (i.e., [(<code>monocular_congruent_aligned</code> - <code>monocular_incongruent_aligned</code>) - (<code>monocular_congruent_misaligned</code> - <code>monocular_incongruent_misaligned</code>)] &gt; [(<code>CFS_congruent_aligned</code> - <code>CFS_incongruent_aligned</code>) - (<code>CFS_congruent_misaligned</code> - <code>CFS_incongruent_misaligned</code>)]).</p>
 </div>
 </div>
-<div id="glmm-with-probit-link" class="section level1" number="2">
-<h1 number="2"><span class="header-section-number">2</span> GLMM with probit link</h1>
-<p>sensitivity d’</p>
+<div id="sensitivity-d-glmm-with-probit-link" class="section level1" number="2">
+<h1 number="2"><span class="header-section-number">2</span> Sensitivity d’: GLMM with probit link</h1>
+<p>This section analyzes the behavioral responses with signal detection theory (with <code>probit</code> link): <code>same</code> and <code>different</code> trials are used as <code>signal</code> and <code>noise</code> to calculate the sensitivity d’.</p>
 <div id="lmm-for-simple-effects-of-congruency" class="section level2" number="2.1">
 <h2 number="2.1"><span class="header-section-number">2.1</span> lmm for simple effects of Congruency</h2>
 <p>It is also testing the interaction between Congruency and Answer.</p>
 <pre class="r"><code>df_resp_2inter &lt;- model.matrix(~ Condition * Alignment / Congruency * answer, df_raw) %&gt;% 
   as_tibble() %&gt;% 
   cbind(df_raw, .)</code></pre>
+<p><code>df_resp_2inter</code> was created to facilitate simplifying random effects later.</p>
 <div id="the-maximal-model" class="section level3" number="2.1.1">
 <h3 number="2.1.1"><span class="header-section-number">2.1.1</span> The maximal model</h3>
 <pre class="r"><code># file_resp1_max &lt;- file.path(folder_out, &quot;Resp1_lmm_max.RData&quot;)
@@ -456,7 +457,7 @@ print(summary(glmm_resp1_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.5554 0.3099 0.2658 0.21529 0.15166 0.13001 0.11714 0.06134 0.03635 6e-05     0     0     0     0     0     0
 ## Proportion of Variance 0.5317 0.1655 0.1217 0.07988 0.03964 0.02913 0.02365 0.00648 0.00228 0e+00     0     0     0     0     0     0
 ## Cumulative Proportion  0.5317 0.6972 0.8189 0.89882 0.93846 0.96759 0.99124 0.99772 1.00000 1e+00     1     1     1     1     1     1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.</p>
 <pre class="r"><code>file_resp1_rdc &lt;- file.path(folder_out, &quot;Resp1_lmm_rdc.RData&quot;)
 
 # fit the rdc model
@@ -764,9 +765,10 @@ print(summary(glmm_resp1_opt), corr = FALSE)</code></pre>
 <div id="lmm-for-simple-effects-of-congruency-1" class="section level2" number="2.2">
 <h2 number="2.2"><span class="header-section-number">2.2</span> lmm for simple effects of Congruency</h2>
 <p>It is also testing the interaction between Congruency and Answer.</p>
-<pre class="r"><code>df_resp_3inter &lt;- model.matrix(~ Condition / Congruency * Alignment  * answer, df_raw) %&gt;% 
+<pre class="r"><code>df_resp_3inter &lt;- model.matrix(~ Condition / Congruency * Alignment * answer, df_raw) %&gt;% 
   as_tibble() %&gt;% 
   cbind(df_raw, .)</code></pre>
+<p><code>df_resp_3inter</code> was created to facilitate simplifying random effects later.</p>
 <div id="the-maximal-model-1" class="section level3" number="2.2.1">
 <h3 number="2.2.1"><span class="header-section-number">2.2.1</span> The maximal model</h3>
 <pre class="r"><code># file_resp2_max &lt;- file.path(folder_out, &quot;Resp2_lmm_max.RData&quot;)
@@ -899,7 +901,7 @@ print(summary(glmm_resp2_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.5556 0.3099 0.2660 0.21537 0.16580 0.15214 0.12561 0.11726 0.06090 0.04815 0.04293 5.413e-05 1.269e-05 5.291e-07     0     0
 ## Proportion of Variance 0.5061 0.1575 0.1160 0.07605 0.04507 0.03795 0.02587 0.02255 0.00608 0.00380 0.00302 0.000e+00 0.000e+00 0.000e+00     0     0
 ## Cumulative Proportion  0.5061 0.6636 0.7796 0.85565 0.90072 0.93868 0.96455 0.98710 0.99318 0.99698 1.00000 1.000e+00 1.000e+00 1.000e+00     1     1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.</p>
 <pre class="r"><code>file_resp2_rdc &lt;- file.path(folder_out, &quot;Resp2_lmm_rdc.RData&quot;)
 
 # fit the rdc model
@@ -1305,7 +1307,7 @@ print(summary(glmm_resp2_opt), corr = FALSE)</code></pre>
 </div>
 <div id="lmm-for-comparing-composite-effects-in-cfs-and-monocular-conditions" class="section level2" number="2.3">
 <h2 number="2.3"><span class="header-section-number">2.3</span> lmm for comparing composite effects in CFS and monocular conditions</h2>
-<p>This analysis will not be repeated; it is the same as that used in <code>lmm_CF_emmeans.Rmd</code> file (around Line 276).</p>
+<p>This analysis will not be repeated; it is the same as that used in <code>lmm_CF_emmeans.Rmd</code> file (around Line 279).</p>
 <p>In short, we observed that the composite effect was larger in the monocular relative to CFS condition.</p>
 </div>
 <div id="summary" class="section level2" number="2.4">
@@ -1313,8 +1315,8 @@ print(summary(glmm_resp2_opt), corr = FALSE)</code></pre>
 <p>With the above three glmm, we observed (1) composite face effect in the monocular condition and (2) it was larger than that in the CFS condition.</p>
 </div>
 </div>
-<div id="lognormal" class="section level1" number="3">
-<h1 number="3"><span class="header-section-number">3</span> Lognormal</h1>
+<div id="rt-lognormal" class="section level1" number="3">
+<h1 number="3"><span class="header-section-number">3</span> RT: Lognormal</h1>
 <pre class="r"><code># make the level names shorter
 df_rt &lt;- df_raw %&gt;% 
   filter(isCorrect == 1)</code></pre>
@@ -1323,6 +1325,7 @@ df_rt &lt;- df_raw %&gt;%
 <pre class="r"><code>df_rt_sim &lt;- model.matrix(~ Condition * Alignment / Congruency, df_rt) %&gt;% 
   as_tibble() %&gt;% 
   cbind(df_rt, .)</code></pre>
+<p><code>df_rt_sim</code> was created to facilitate simplifying random effects later.</p>
 <div id="the-maximal-model-2" class="section level3" number="3.1.1">
 <h3 number="3.1.1"><span class="header-section-number">3.1.1</span> The maximal model</h3>
 <pre class="r"><code># file_rt1_max &lt;- file.path(folder_out, &quot;RT1_lmm_max.RData&quot;)
@@ -1422,7 +1425,7 @@ print(summary(lmm_rt1_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.6331 0.3595 0.07423 5.695e-09    0    0    0    0
 ## Proportion of Variance 0.7484 0.2414 0.01029 0.000e+00    0    0    0    0
 ## Cumulative Proportion  0.7484 0.9897 1.00000 1.000e+00    1    1    1    1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.</p>
 <pre class="r"><code>file_rt1_rdc &lt;- file.path(folder_out, &quot;RT1_lmm_rdc.RData&quot;)
 
 # fit the rdc model
@@ -1590,6 +1593,7 @@ print(summary(lmm_rt1_opt), corr = FALSE)</code></pre>
 <pre class="r"><code>df_rt_cf &lt;- model.matrix(~ Condition / Congruency * Alignment, df_rt) %&gt;% 
   as_tibble() %&gt;% 
   cbind(df_rt, .)</code></pre>
+<p><code>df_rt_cf</code> was created to facilitate simplifying random effects later.</p>
 <div id="the-maximal-model-3" class="section level3" number="3.2.1">
 <h3 number="3.2.1"><span class="header-section-number">3.2.1</span> The maximal model</h3>
 <pre class="r"><code># file_rt2_max &lt;- file.path(folder_out, &quot;RT2_lmm_max.RData&quot;)
@@ -1689,7 +1693,7 @@ print(summary(lmm_rt2_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.6331 0.3595 0.07423 3.034e-07    0    0    0    0
 ## Proportion of Variance 0.7484 0.2413 0.01029 0.000e+00    0    0    0    0
 ## Cumulative Proportion  0.7484 0.9897 1.00000 1.000e+00    1    1    1    1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.</p>
 <pre class="r"><code>file_rt2_rdc &lt;- file.path(folder_out, &quot;RT2_lmm_rdc.RData&quot;)
 
 # fit the rdc model

@@ -11,7 +11,7 @@ output:
 ---
 
 ```{r global_options, echo = FALSE, include = FALSE}
-options(width = 3000)
+options(width = 1500)
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = TRUE,
                       cache = FALSE, tidy = FALSE, size = "small")
 ```
@@ -35,28 +35,28 @@ options(contrasts = rep("contr.sdif", 2))
 ```
 
 ## Brief introduction
-The data was a subset of [one previous study](https://psyarxiv.com/j8g6z/) where data was analyzed with repeated-measures ANOVA. The independent variables are:
+The data were a subset of [one previous study](https://psyarxiv.com/j8g6z/){target="_blank"} where data were analyzed with repeated-measures ANOVA. The independent variables are:
   
 + Condition: monocular (**O**) vs. CFS (**F**)  
 + Congruency: congruent (**C**) vs. incongruent (**I**)  
 + Alignment: aligned (**A**) vs. misaligned (**M**)  
 + answer: same (**S**) vs. different (**D**) (used as `signal` and `noise` in Signal Detection Theory)  
 
-The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times will be analyzed with lognormal transformation.
+The dependent variables are behavioral responses and response times. Behavioral responses are analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times are analyzed with log-normal transformation.
 
 The main research questions are: 
 (1) whether there is composite face effect in the `CFS` condition;
 (2) whether there is composite face effect in the `monocular` condition;
-(3) whether the composite face effect is larger in the `monocular` relative to the `CFS` condition. 
+(3) whether the composite face effect is larger in the `monocular` than the `CFS` condition. 
 
-As discussed [earlier](https://psyarxiv.com/yhmzg/), we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
+As discussed [earlier](https://psyarxiv.com/yhmzg/){target="_blank"}, we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
 
 Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]). 
 
 ## Prepare data
 Load and set the default levels for the factors:
 ```{r read the data file}
-folder_out <- "output"
+folder_out <- "cache"
 
 df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
   mutate(Condition = factor(Condition, levels = c("monocular", "CFS")),
@@ -67,7 +67,7 @@ head(df_raw)
 ```
 
 ```{r}
-# create new variables for each parameter
+# create new variables for each parameter in lmm
 df_emm <- df_raw %>% 
   model.matrix(~ Condition * Congruency * Alignment * answer, .) %>% 
   as_tibble() %>% 
@@ -91,8 +91,8 @@ df_emm <- df_raw %>%
 ```
 
 
-# GLMM with probit link
-Analyze the sensitivity d'.
+# Sensitivity d': GLMM with probit link
+This section analyzes the behavioral responses with signal detection theory (with `probit` link): `same` and `different` trials are used as `signal` and `noise` to calculate the sensitivity d'.
 
 ## Fitting the glmm
 
@@ -123,7 +123,6 @@ Analyze the sensitivity d'.
 
 ### The zero-correlation-parameter model
 ```{r resp zcp }
-
 file_resp_zcp <- file.path(folder_out, "Resp_lmm_emm_zcp.RData")
 
 # fit the zcp model
@@ -152,7 +151,7 @@ print(summary(glmm_resp_zcp), corr = FALSE)
 summary(rePCA(glmm_resp_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+Random effect that explained less than 0.1% variances were removed from the zcp model (`glmm_resp_zcp`), leading to the reduced model.
 
 ```{r resp rdc }
 file_resp_rdc <- file.path(folder_out, "Resp_lmm_emm_rdc.RData")
@@ -179,6 +178,7 @@ print(summary(glmm_resp_rdc), corr = FALSE)
 ```
 
 ### The extended model
+Correlations among random effects are added back to the reduced model (`glmm_resp_rdc`) to create the extended model. 
 ```{r resp etd }
 file_resp_etd <- file.path(folder_out, "Resp_lmm_emm_etd.RData")
 
@@ -207,7 +207,7 @@ print(summary(glmm_resp_etd), corr = FALSE)
 summary(rePCA(glmm_resp_etd))
 ```
 
-Random effect that explained less than 1% variances were removed from the etd model, resulting in another extended model (`etd1`). Not quite sure how I should remove the random effects.
+Random effect that explained less than 1% variances were removed from the extended model `(glmm_resp_etd)`, leading to another extended model (`glmm_resp_etd1`). (Not quite sure what rule of thumb I should follow to simplify random effects).
 
 ```{r resp etd1 }
 file_resp_etd1 <- file.path(folder_out, "Resp_lmm_emm_etd1.RData")
@@ -238,6 +238,8 @@ print(summary(glmm_resp_etd1), corr = FALSE)
 summary(rePCA(glmm_resp_etd1))
 ```
 
+Random effect that explained less than 1% variances were removed from the extended model `(glmm_resp_etd1)`, leading to another extended model (`glmm_resp_etd2`). (Not quite sure what rule of thumb I should follow to simplify random effects).
+
 ```{r resp etd2 }
 file_resp_etd2 <- file.path(folder_out, "Resp_lmm_emm_etd2.RData")
 
@@ -265,6 +267,7 @@ print(summary(glmm_resp_etd2), corr = FALSE)
 Though `glmm_resp_etd2` does not converge, the `glmm_resp_rdc` already explains the data better (than `glmm_resp_etd2`).
 
 ### The optimal model
+`glmm_resp_etd2` is compared to `glmm_resp_rdc` and the model that explains data better is used as the optimal model. Follow-up comparisons are based on the optimal model. 
 ```{r comapre etd and rdc  d}
 # compare the extended and reduced model
 anova(glmm_resp_etd2, glmm_resp_rdc, refit = FALSE)
@@ -275,7 +278,6 @@ glmm_resp_opt <- glmm_resp_rdc
 
 print(summary(glmm_resp_opt), corr = FALSE)
 ```
-Follow-up comparisons were based on the optimal model. 
 
 ## Comparisons
 
@@ -283,19 +285,19 @@ Follow-up comparisons were based on the optimal model.
 emm_resp <- emmeans(glmm_resp_opt, ~ Condition * Congruency * Alignment * answer)
 ```
 
-sensitivity d' ($Z_{same}$ - $Z_{different}$) in congruent vs. incongruent for aligned faces (i.e., the interaction between Congruency and Answer)
+Sensitivity d' ($Z_{same}$ - $Z_{different}$) in congruent vs. incongruent for aligned faces (i.e., the interaction between Congruency and Answer):
 ```{r}
 # do not need back-transformed
 (resp_2inter <- contrast(emm_resp, interaction="pairwise", by = c("Condition", "Alignment"))[c(1,2)])
 ```
 
-composite face effect in sensitivity d' (i.e., the interaction between Congruency, Alignment and Answer)
+Composite face effect in sensitivity d' (i.e., the interaction between Congruency, Alignment and Answer):
 ```{r}
 # do not need back-transformed
 (resp_3inter <- contrast(emm_resp, interaction="pairwise", by = c("Condition"))[c(1,2)])
 ```
 
-Compare the composite face effect between monocluar and CFS
+Compare the composite face effect between monocular and CFS conditions:
 ```{r}
 (resp_4inter <- contrast(emm_resp, interaction="pairwise"))
 ```
@@ -314,8 +316,8 @@ resp_4inter
 With all above evidence of responses, we may claim (2) the composite face effect was larger in the monocular relative to the CFS condition.
 
 
-# Lognormal
-Analyze response times of correct trials with lognormal transformation.
+# RT: Lognormal
+This sections analyzes response times of correct trials with log-normal transformation.
 
 ## Fitting the glmm
 ### The maximal model
@@ -370,7 +372,7 @@ print(summary(lmm_rt_zcp), corr = FALSE)
 summary(rePCA(lmm_rt_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+Random effect that explained less than 0.1% variances are removed from the zcp model (`lmm_rt_zcp`), leading to the reduced model.
 
 ```{r  rt rdc}
 file_rt_rdc <- file.path(folder_out, "RT_lmm_emm_rdc.RData")
@@ -418,6 +420,7 @@ print(summary(lmm_rt_etd), corr = FALSE)
 ```
 
 ### The optimal model
+`lmm_rt_etd` is compared to `lmm_rt_rdc` and the model that explains data better is used as the optimal model. Follow-up comparisons are based on the optimal model. 
 ```{r  comapre rt etd and rdc}
 # compare the extended and reduced model
 anova(lmm_rt_etd, lmm_rt_rdc, refit = FALSE)
@@ -436,22 +439,23 @@ emm_rt <- emmeans(lmm_rt_opt, ~ Condition * Congruency * Alignment, lmer.df = "s
                   pbkrtest.limit = 12800, lmerTest.limit = 12800)
 ```
 
-
+Compare congruent vs. incongruent for aligned faces:
 ```{r}
 (rt_sim <- contrast(emm_rt, "pairwise", simple="Congruency")[c(1,2)])
 ```
 
+Composite face effect of RT (i.e., the interaction between Congruency and Alignment):
 ```{r}
 (rt_2inter <- contrast(emm_rt, interaction="pairwise", by="Condition")[c(1,2)])
 ```
 
+Compare the composite face effect between monocular and CFS conditions:
 ```{r}
 (rt_3inter <- contrast(emm_rt, interaction="pairwise"))
 ```
 
 ## Summary
 With the above evidence of response times, (1) we failed to observe the evidence for composite face effect in any condition. Also, (2) no evidence was found that the composite face effect differed between the monocular and CFS conditions.
-
 
 # Session information {.unlisted .unnumbered}
 ```{r}

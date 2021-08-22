@@ -258,7 +258,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Generalized linear mixed-effects modeling of the composite face task</h1>
 <h4 class="author"><a href="https://haiyangjin.github.io/">Haiyang Jin</a></h4>
-<h4 class="date">06-07-2021</h4>
+<h4 class="date">22-08-2021</h4>
 
 </div>
 
@@ -267,7 +267,7 @@ div.tocify {
 <h1 number="1"><span class="header-section-number">1</span> Preparation</h1>
 <div id="brief-introduction" class="section level2" number="1.1">
 <h2 number="1.1"><span class="header-section-number">1.1</span> Brief introduction</h2>
-<p>The data was a subset of <a href="https://psyarxiv.com/j8g6z/">one previous study</a> where data was analyzed with repeated-measures ANOVA. The independent variables are:</p>
+<p>The data were a subset of <a href="https://psyarxiv.com/j8g6z/" target="_blank">one previous study</a> where data were analyzed with repeated-measures ANOVA. The independent variables are:</p>
 <ul>
 <li>Condition: monocular (<strong>O</strong>) vs. CFS (<strong>F</strong>)<br />
 </li>
@@ -277,15 +277,15 @@ div.tocify {
 </li>
 <li>answer: same (<strong>S</strong>) vs. different (<strong>D</strong>) (used as <code>signal</code> and <code>noise</code> in Signal Detection Theory)</li>
 </ul>
-<p>The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with <code>probit</code> link). Response times will be analyzed with lognormal transformation.</p>
-<p>The main research questions are: (1) whether there is composite face effect in the <code>CFS</code> condition; (2) whether there is composite face effect in the <code>monocular</code> condition; (3) whether the composite face effect is larger in the <code>monocular</code> relative to the <code>CFS</code> condition.</p>
-<p>As discussed <a href="https://psyarxiv.com/yhmzg/">earlier</a>, we may claim observing the composite face effect in a particular condition (e.g., <code>CFS</code> or <code>monocular</code>) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., <code>congruent_aligned</code> &gt; <code>incongruent_aligned</code>) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (<code>congruent_aligned</code> - <code>incongruent_aligned</code>) &gt; (<code>congruent_misaligned</code> - <code>incongruent_misaligned</code>)).</p>
+<p>The dependent variables are behavioral responses and response times. Behavioral responses are analyzed with signal detection theory (i.e., generalized linear mixed-effects models with <code>probit</code> link). Response times are analyzed with log-normal transformation.</p>
+<p>The main research questions are: (1) whether there is composite face effect in the <code>CFS</code> condition; (2) whether there is composite face effect in the <code>monocular</code> condition; (3) whether the composite face effect is larger in the <code>monocular</code> than the <code>CFS</code> condition.</p>
+<p>As discussed <a href="https://psyarxiv.com/yhmzg/" target="_blank">earlier</a>, we may claim observing the composite face effect in a particular condition (e.g., <code>CFS</code> or <code>monocular</code>) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., <code>congruent_aligned</code> &gt; <code>incongruent_aligned</code>) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (<code>congruent_aligned</code> - <code>incongruent_aligned</code>) &gt; (<code>congruent_misaligned</code> - <code>incongruent_misaligned</code>)).</p>
 <p>Moreover, for the third question, we also need to examine whether the composite effect in the <code>monocular</code> condition is larger than that in the <code>CFS</code> condition (i.e., [(<code>monocular_congruent_aligned</code> - <code>monocular_incongruent_aligned</code>) - (<code>monocular_congruent_misaligned</code> - <code>monocular_incongruent_misaligned</code>)] &gt; [(<code>CFS_congruent_aligned</code> - <code>CFS_incongruent_aligned</code>) - (<code>CFS_congruent_misaligned</code> - <code>CFS_incongruent_misaligned</code>)]).</p>
 </div>
 <div id="prepare-data" class="section level2" number="1.2">
 <h2 number="1.2"><span class="header-section-number">1.2</span> Prepare data</h2>
 <p>Load and set the default levels for the factors:</p>
-<pre class="r"><code>folder_out &lt;- &quot;output&quot;
+<pre class="r"><code>folder_out &lt;- &quot;cache&quot;
 
 df_raw &lt;-  read_csv(file.path(&quot;data&quot;, &quot;example_data.csv&quot;)) %&gt;% 
   mutate(Condition = factor(Condition, levels = c(&quot;monocular&quot;, &quot;CFS&quot;)),
@@ -302,7 +302,7 @@ head(df_raw)</code></pre>
 ## 4 Subj01      CFS       congruent   aligned    same          1         1   501
 ## 5 Subj01      CFS       incongruent aligned    same          1         1   376
 ## 6 Subj01      CFS       congruent   misaligned different     0         1   631</code></pre>
-<pre class="r"><code># create new variables for each parameter
+<pre class="r"><code># create new variables for each parameter in lmm
 df_emm &lt;- df_raw %&gt;% 
   model.matrix(~ Condition * Congruency * Alignment * answer, .) %&gt;% 
   as_tibble() %&gt;% 
@@ -325,9 +325,9 @@ df_emm &lt;- df_raw %&gt;%
   cbind(df_raw, .)</code></pre>
 </div>
 </div>
-<div id="glmm-with-probit-link" class="section level1" number="2">
-<h1 number="2"><span class="header-section-number">2</span> GLMM with probit link</h1>
-<p>Analyze the sensitivity d’.</p>
+<div id="sensitivity-d-glmm-with-probit-link" class="section level1" number="2">
+<h1 number="2"><span class="header-section-number">2</span> Sensitivity d’: GLMM with probit link</h1>
+<p>This section analyzes the behavioral responses with signal detection theory (with <code>probit</code> link): <code>same</code> and <code>different</code> trials are used as <code>signal</code> and <code>noise</code> to calculate the sensitivity d’.</p>
 <div id="fitting-the-glmm" class="section level2" number="2.1">
 <h2 number="2.1"><span class="header-section-number">2.1</span> Fitting the glmm</h2>
 <div id="the-maximal-model" class="section level3" number="2.1.1">
@@ -442,7 +442,7 @@ print(summary(glmm_resp_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.5551 0.3091 0.2659 0.22285 0.21562 0.1789 0.15112 0.13088 0.1168 0.06265 0.05090     0     0     0     0     0
 ## Proportion of Variance 0.4650 0.1442 0.1067 0.07495 0.07016 0.0483 0.03446 0.02585 0.0206 0.00592 0.00391     0     0     0     0     0
 ## Cumulative Proportion  0.4650 0.6091 0.7158 0.79079 0.86096 0.9093 0.94372 0.96957 0.9902 0.99609 1.00000     1     1     1     1     1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances were removed from the zcp model (<code>glmm_resp_zcp</code>), leading to the reduced model.</p>
 <pre class="r"><code>file_resp_rdc &lt;- file.path(folder_out, &quot;Resp_lmm_emm_rdc.RData&quot;)
 
 # fit the rdc model
@@ -515,6 +515,7 @@ print(summary(glmm_resp_rdc), corr = FALSE)</code></pre>
 </div>
 <div id="the-extended-model" class="section level3" number="2.1.4">
 <h3 number="2.1.4"><span class="header-section-number">2.1.4</span> The extended model</h3>
+<p>Correlations among random effects are added back to the reduced model (<code>glmm_resp_rdc</code>) to create the extended model.</p>
 <pre class="r"><code>file_resp_etd &lt;- file.path(folder_out, &quot;Resp_lmm_emm_etd.RData&quot;)
 
 # fit the etd model
@@ -593,7 +594,7 @@ print(summary(glmm_resp_etd), corr = FALSE)</code></pre>
 ## Standard deviation     0.8048 0.4161 0.3359 0.23925 0.13044 0.06177 4.195e-06 2.269e-07 6.808e-08 1.865e-08     0
 ## Proportion of Variance 0.6402 0.1711 0.1115 0.05658 0.01682 0.00377 0.000e+00 0.000e+00 0.000e+00 0.000e+00     0
 ## Cumulative Proportion  0.6402 0.8113 0.9228 0.97941 0.99623 1.00000 1.000e+00 1.000e+00 1.000e+00 1.000e+00     1</code></pre>
-<p>Random effect that explained less than 1% variances were removed from the etd model, resulting in another extended model (<code>etd1</code>). Not quite sure how I should remove the random effects.</p>
+<p>Random effect that explained less than 1% variances were removed from the extended model <code>(glmm_resp_etd)</code>, leading to another extended model (<code>glmm_resp_etd1</code>). (Not quite sure what rule of thumb I should follow to simplify random effects).</p>
 <pre class="r"><code>file_resp_etd1 &lt;- file.path(folder_out, &quot;Resp_lmm_emm_etd1.RData&quot;)
 
 # fit the etd1 model
@@ -666,6 +667,7 @@ print(summary(glmm_resp_etd1), corr = FALSE)</code></pre>
 ## Standard deviation     0.7115 0.3451 0.2922 2.155e-07    0
 ## Proportion of Variance 0.7123 0.1676 0.1202 0.000e+00    0
 ## Cumulative Proportion  0.7123 0.8798 1.0000 1.000e+00    1</code></pre>
+<p>Random effect that explained less than 1% variances were removed from the extended model <code>(glmm_resp_etd1)</code>, leading to another extended model (<code>glmm_resp_etd2</code>). (Not quite sure what rule of thumb I should follow to simplify random effects).</p>
 <pre class="r"><code>file_resp_etd2 &lt;- file.path(folder_out, &quot;Resp_lmm_emm_etd2.RData&quot;)
 
 # fit the etd2 model
@@ -733,6 +735,7 @@ print(summary(glmm_resp_etd2), corr = FALSE)</code></pre>
 </div>
 <div id="the-optimal-model" class="section level3" number="2.1.5">
 <h3 number="2.1.5"><span class="header-section-number">2.1.5</span> The optimal model</h3>
+<p><code>glmm_resp_etd2</code> is compared to <code>glmm_resp_rdc</code> and the model that explains data better is used as the optimal model. Follow-up comparisons are based on the optimal model.</p>
 <pre class="r"><code># compare the extended and reduced model
 anova(glmm_resp_etd2, glmm_resp_rdc, refit = FALSE)</code></pre>
 <pre><code>## Data: df_emm
@@ -798,25 +801,24 @@ print(summary(glmm_resp_opt), corr = FALSE)</code></pre>
 ## ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same  0.59442    0.23873   2.490 0.012775 *  
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
-<p>Follow-up comparisons were based on the optimal model.</p>
 </div>
 </div>
 <div id="comparisons" class="section level2" number="2.2">
 <h2 number="2.2"><span class="header-section-number">2.2</span> Comparisons</h2>
 <pre class="r"><code>emm_resp &lt;- emmeans(glmm_resp_opt, ~ Condition * Congruency * Alignment * answer)</code></pre>
-<p>sensitivity d’ (<span class="math inline">\(Z_{same}\)</span> - <span class="math inline">\(Z_{different}\)</span>) in congruent vs. incongruent for aligned faces (i.e., the interaction between Congruency and Answer)</p>
+<p>Sensitivity d’ (<span class="math inline">\(Z_{same}\)</span> - <span class="math inline">\(Z_{different}\)</span>) in congruent vs. incongruent for aligned faces (i.e., the interaction between Congruency and Answer):</p>
 <pre class="r"><code># do not need back-transformed
 (resp_2inter &lt;- contrast(emm_resp, interaction=&quot;pairwise&quot;, by = c(&quot;Condition&quot;, &quot;Alignment&quot;))[c(1,2)])</code></pre>
 <pre><code>##  Congruency_pairwise     answer_pairwise  Condition Alignment estimate    SE  df z.ratio p.value
 ##  congruent - incongruent same - different monocular aligned     0.6882 0.126 Inf 5.444   &lt;.0001 
 ##  congruent - incongruent same - different CFS       aligned     0.0822 0.124 Inf 0.665   0.5063</code></pre>
-<p>composite face effect in sensitivity d’ (i.e., the interaction between Congruency, Alignment and Answer)</p>
+<p>Composite face effect in sensitivity d’ (i.e., the interaction between Congruency, Alignment and Answer):</p>
 <pre class="r"><code># do not need back-transformed
 (resp_3inter &lt;- contrast(emm_resp, interaction=&quot;pairwise&quot;, by = c(&quot;Condition&quot;))[c(1,2)])</code></pre>
 <pre><code>##  Congruency_pairwise     Alignment_pairwise   answer_pairwise  Condition estimate    SE  df z.ratio p.value
 ##  congruent - incongruent aligned - misaligned same - different monocular   0.5733 0.179 Inf  3.200  0.0014 
 ##  congruent - incongruent aligned - misaligned same - different CFS        -0.0211 0.174 Inf -0.121  0.9037</code></pre>
-<p>Compare the composite face effect between monocluar and CFS</p>
+<p>Compare the composite face effect between monocular and CFS conditions:</p>
 <pre class="r"><code>(resp_4inter &lt;- contrast(emm_resp, interaction=&quot;pairwise&quot;))</code></pre>
 <pre><code>##  Condition_pairwise Congruency_pairwise     Alignment_pairwise   answer_pairwise  estimate    SE  df z.ratio p.value
 ##  monocular - CFS    congruent - incongruent aligned - misaligned same - different    0.594 0.239 Inf 2.490   0.0128</code></pre>
@@ -836,9 +838,9 @@ print(summary(glmm_resp_opt), corr = FALSE)</code></pre>
 <p>With all above evidence of responses, we may claim (2) the composite face effect was larger in the monocular relative to the CFS condition.</p>
 </div>
 </div>
-<div id="lognormal" class="section level1" number="3">
-<h1 number="3"><span class="header-section-number">3</span> Lognormal</h1>
-<p>Analyze response times of correct trials with lognormal transformation.</p>
+<div id="rt-lognormal" class="section level1" number="3">
+<h1 number="3"><span class="header-section-number">3</span> RT: Lognormal</h1>
+<p>This sections analyzes response times of correct trials with log-normal transformation.</p>
 <div id="fitting-the-glmm-1" class="section level2" number="3.1">
 <h2 number="3.1"><span class="header-section-number">3.1</span> Fitting the glmm</h2>
 <div id="the-maximal-model-1" class="section level3" number="3.1.1">
@@ -932,7 +934,7 @@ print(summary(lmm_rt_zcp), corr = FALSE)</code></pre>
 ## Standard deviation     0.6331 0.3595 0.07424 2.246e-08 1.602e-09    0    0    0
 ## Proportion of Variance 0.7484 0.2413 0.01029 0.000e+00 0.000e+00    0    0    0
 ## Cumulative Proportion  0.7484 0.9897 1.00000 1.000e+00 1.000e+00    1    1    1</code></pre>
-<p>Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.</p>
+<p>Random effect that explained less than 0.1% variances are removed from the zcp model (<code>lmm_rt_zcp</code>), leading to the reduced model.</p>
 <pre class="r"><code>file_rt_rdc &lt;- file.path(folder_out, &quot;RT_lmm_emm_rdc.RData&quot;)
 
 # fit the rdc model
@@ -1039,6 +1041,7 @@ print(summary(lmm_rt_etd), corr = FALSE)</code></pre>
 </div>
 <div id="the-optimal-model-1" class="section level3" number="3.1.5">
 <h3 number="3.1.5"><span class="header-section-number">3.1.5</span> The optimal model</h3>
+<p><code>lmm_rt_etd</code> is compared to <code>lmm_rt_rdc</code> and the model that explains data better is used as the optimal model. Follow-up comparisons are based on the optimal model.</p>
 <pre class="r"><code># compare the extended and reduced model
 anova(lmm_rt_etd, lmm_rt_rdc, refit = FALSE)</code></pre>
 <pre><code>## Data: filter(df_emm, isCorrect == 1)
@@ -1090,6 +1093,7 @@ print(summary(lmm_rt_opt), corr = FALSE)</code></pre>
 <h2 number="3.2"><span class="header-section-number">3.2</span> Comparisons</h2>
 <pre class="r"><code>emm_rt &lt;- emmeans(lmm_rt_opt, ~ Condition * Congruency * Alignment, lmer.df = &quot;satterthwaite&quot;, 
                   pbkrtest.limit = 12800, lmerTest.limit = 12800)</code></pre>
+<p>Compare congruent vs. incongruent for aligned faces:</p>
 <pre class="r"><code>(rt_sim &lt;- contrast(emm_rt, &quot;pairwise&quot;, simple=&quot;Congruency&quot;)[c(1,2)])</code></pre>
 <pre><code>##  contrast                Condition Alignment estimate     SE    df t.ratio p.value
 ##  congruent - incongruent monocular aligned    -0.0354 0.0145 11070 -2.449  0.0143 
@@ -1097,6 +1101,7 @@ print(summary(lmm_rt_opt), corr = FALSE)</code></pre>
 ## 
 ## Degrees-of-freedom method: satterthwaite 
 ## Results are given on the log (not the response) scale.</code></pre>
+<p>Composite face effect of RT (i.e., the interaction between Congruency and Alignment):</p>
 <pre class="r"><code>(rt_2inter &lt;- contrast(emm_rt, interaction=&quot;pairwise&quot;, by=&quot;Condition&quot;)[c(1,2)])</code></pre>
 <pre><code>##  Congruency_pairwise     Alignment_pairwise   Condition estimate     SE    df t.ratio p.value
 ##  congruent - incongruent aligned - misaligned monocular  -0.0340 0.0203 11067 -1.670  0.0949 
@@ -1104,6 +1109,7 @@ print(summary(lmm_rt_opt), corr = FALSE)</code></pre>
 ## 
 ## Degrees-of-freedom method: satterthwaite 
 ## Results are given on the log (not the response) scale.</code></pre>
+<p>Compare the composite face effect between monocular and CFS conditions:</p>
 <pre class="r"><code>(rt_3inter &lt;- contrast(emm_rt, interaction=&quot;pairwise&quot;))</code></pre>
 <pre><code>##  Condition_pairwise Congruency_pairwise     Alignment_pairwise   estimate     SE    df t.ratio p.value
 ##  monocular - CFS    congruent - incongruent aligned - misaligned  0.00645 0.0287 11068 0.225   0.8219 

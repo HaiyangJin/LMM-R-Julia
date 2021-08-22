@@ -58,27 +58,27 @@ head(df_raw)
 ```
 
 ## Brief introduction
-The data was a subset of [one previous study](https://psyarxiv.com/j8g6z/) where data was analyzed with repeated-measures ANOVA. The independent variables are:
+The data were a subset of [one previous study](https://psyarxiv.com/j8g6z/){target="_blank"} where data were analyzed with repeated-measures ANOVA. The independent variables are:
   
 + Condition: monocular (**O**) vs. CFS (**F**)  
 + Congruency: congruent (**C**) vs. incongruent (**I**)  
 + Alignment: aligned (**A**) vs. misaligned (**M**)  
 + answer: same (**S**) vs. different (**D**) (used as `signal` and `noise` in Signal Detection Theory)  
 
-The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times will be analyzed with lognormal transformation.
+The dependent variables are behavioral responses and response times. Behavioral responses are analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times are analyzed with log-normal transformation.
 
 The main research questions are: 
 (1) whether there is composite face effect in the `CFS` condition;
 (2) whether there is composite face effect in the `monocular` condition;
-(3) whether the composite face effect is larger in the `monocular` relative to the `CFS` condition. 
+(3) whether the composite face effect is larger in the `monocular` than the `CFS` condition. 
 
-As discussed [earlier](https://psyarxiv.com/yhmzg/), we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`; `CA` > `IA`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`); (`CA` - `IA`) > (`CM` - `IM`)). 
+As discussed [earlier](https://psyarxiv.com/yhmzg/){target="_blank"}, we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`; `CA` > `IA`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`); (`CA` - `IA`) > (`CM` - `IM`)). 
 
 Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]; [(`OCA` - `OIA`) - (`OCM` - `OIM`)] > (`FCA` - `FIA`) - (`FCM` - `FIM`)]). 
 
 
-# GLMM with probit link
-sensitivity d'
+# Sensitivity d': GLMM with probit link
+This section analyzes the behavioral responses with signal detection theory (with `probit` link): `same` and `different` trials are used as `signal` and `noise` to calculate the sensitivity d'.
 
 ## Priori contrasts
 
@@ -107,8 +107,11 @@ df_resp <- df_raw %>%
 ```
 
 ```{r}
-contrasts(df_resp$I_) <- contr.hypothesis(hypr_resp)
+# contrasts(df_resp$I_) <- contr.hypothesis(hypr_resp)
 ```
+Error in stats::`contrasts<-`(`*tmp*`, value = cm) : singular contrast matrix
+
+**Question**: According to the research question, I need to test the five effects discussed earlier (i.e., the first five columns in `hypr_resp`). How should I decide the other (10) effects tested in the model?
 
 
 # Lognormal
@@ -127,128 +130,8 @@ df_rt <- df_raw %>%
 ```
 
 
-# try
-
-```{r}
-model.matrix(~ Congruency, df_raw, contrasts.arg = list(Congruency="contr.sum")) %>% 
-  as.data.frame() %>% 
-  distinct()
-```
-
-
-```{r}
-df_tmp <- df_raw %>% 
-  filter(Condition == "monocular")
-
-aov_tmp <- aov_4(isCorrect ~ Congruency * Alignment * answer + 
-                   (Congruency * Alignment * answer | Participant), 
-                 data = df_tmp, 
-                 fun_aggregate = mean)
-
-```
-
-
-```{r}
-emm_tmp <- emmeans(aov_tmp, ~ Alignment | Congruency + answer)
-
-contrast(emm_tmp, "pairwise")[1:4]
-```
-
-
-```{r}
-model.matrix(~ Condition / Congruency * Alignment, df_rt) %>% 
-  as_tibble() %>% 
-  distinct() %>% 
-  as.matrix() %>% 
-  ginv2()
-```
-
-```{r}
-options(contrasts=rep("contr.treatment", 2))
-model.matrix(~ Condition / Congruency * Alignment, df_rt) %>% 
-  as_tibble() %>% 
-  distinct() %>% 
-  as.matrix() %>% 
-  ginv2()
-```
-
-
-```{r}
-
-
-hypr_rt1 <- hypr((OCA + OIA + OCM + OIM + FCA + FIA + FCM + FIM)/8 ~ 0, # intercept
-                OCA - OIA ~ 0,
-                OCA - OIA - OCM + OIM ~ 0,
-                FCA - FIA ~ 0,
-                # FCA - FIA - FCM + FIM ~ 0,
-                OCA - OIA - OCM + OIM - (FCA - FIA - FCM + FIM) ~ 0,
-                
-                levels = levels_rt)
-hypr_rt
-```
-
-```{r}
-cor(contr.hypothesis(hypr_resp))
-hypr_rt1
-```
-
-
-
-```{r}
-contrasts(df_rt$I_) <- contr.hypothesis(hypr_rt)
-```
-
-
-
-**Question**: According to my research question, I need to test the five effects discussed earlier (i.e., the first five columns in `hypr_resp`). How should I decide the other (10) effects tested in the model?
-
-```{r}
-# apply the custom contrast to raw data
-contrasts(df_raw$I_) <- con_resp
-
-# create variables for each parameter
-df_resp <- as_tibble(model.matrix(~ 1 + I_, df_raw)) %>% 
-  cbind(df_raw, .)
-```
-
-
-
-for response times
-```{r only keep correct trials (but with both same and different trials) }
-df_rt <- df_raw %>% 
-  filter(isCorrect == 1)
-
-```
-
-
-
-
-```{r  rt zcp}
-file_rt_zcp <- file.path(folder_lmm, "rt_lmm_zcp.RData")
-
-# fit the zcp1 model
-if (!file.exists(file_rt_zcp)) {
-  glmm_rt_zcp <- lmer(
-    # log(rt) ~ Cue * Congruency * Alignment +  
-    #   (Cue_C + Con_C + Ali_C + 
-    #      Cue_Con + Cue_Ali + Con_Ali + 
-    #      Cue_Con_Ali || Participant),
-    data = df_lmm,
-    control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-                          optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-  )
-  # save(glmm_rt_zcp, file = file_rt_zcp)
-} else {
-  load(file_rt_zcp)
-}
-
-print(summary(glmm_rt_zcp), corr = FALSE)
-```
-
-
 # Session information {.unlisted .unnumbered}
 ```{r}
 sessionInfo()
 ```
-
 

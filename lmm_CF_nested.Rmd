@@ -45,7 +45,7 @@ options(contrasts = rep("contr.sdif", 2))
 #   mutate(Participant = sprintf("Subj%02d", as.numeric(Participant)))
 # write_csv(df_tmp, file = file.path("data", "example_data.csv"))
 
-folder_out <- "output"
+folder_out <- "cache"
 
 df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
   mutate(Condition = if_else(Condition=="monocular", "mon", Condition),
@@ -59,27 +59,26 @@ head(df_raw)
 ```
 
 ## Brief introduction
-The data was a subset of [one previous study](https://psyarxiv.com/j8g6z/) where data was analyzed with repeated-measures ANOVA. The independent variables are:
+The data were a subset of [one previous study](https://psyarxiv.com/j8g6z/){target="_blank"} where data were analyzed with repeated-measures ANOVA. The independent variables are:
   
 + Condition: monocular (**O**) vs. CFS (**F**)  
 + Congruency: congruent (**C**) vs. incongruent (**I**)  
 + Alignment: aligned (**A**) vs. misaligned (**M**)  
 + answer: same (**S**) vs. different (**D**) (used as `signal` and `noise` in Signal Detection Theory)  
 
-The dependent variables are behavioral responses and response times. Behavioral responses will be analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times will be analyzed with lognormal transformation.
+The dependent variables are behavioral responses and response times. Behavioral responses are analyzed with signal detection theory (i.e., generalized linear mixed-effects models with `probit` link). Response times are analyzed with log-normal transformation.
 
 The main research questions are: 
 (1) whether there is composite face effect in the `CFS` condition;
 (2) whether there is composite face effect in the `monocular` condition;
-(3) whether the composite face effect is larger in the `monocular` relative to the `CFS` condition. 
+(3) whether the composite face effect is larger in the `monocular` than the `CFS` condition. 
 
-As discussed [earlier](https://psyarxiv.com/yhmzg/), we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
+As discussed [earlier](https://psyarxiv.com/yhmzg/){target="_blank"}, we may claim observing the composite face effect in a particular condition (e.g., `CFS` or `monocular`) only when (1) the performance for aligned faces is better in the congruent relative to the incongruent condition (i.e., `congruent_aligned` > `incongruent_aligned`) and (2) the increased performance in congruent relative to incongruent condition is larger for aligned compared to misaligned faces (i.e., (`congruent_aligned` - `incongruent_aligned`) > (`congruent_misaligned` - `incongruent_misaligned`)). 
 
 Moreover, for the third question, we also need to examine whether the composite effect in the `monocular` condition is larger than that in the `CFS` condition (i.e., [(`monocular_congruent_aligned` - `monocular_incongruent_aligned`) - (`monocular_congruent_misaligned` - `monocular_incongruent_misaligned`)] > [(`CFS_congruent_aligned` - `CFS_incongruent_aligned`) - (`CFS_congruent_misaligned` - `CFS_incongruent_misaligned`)]). 
 
-
-# GLMM with probit link
-sensitivity d'
+# Sensitivity d': GLMM with probit link
+This section analyzes the behavioral responses with signal detection theory (with `probit` link): `same` and `different` trials are used as `signal` and `noise` to calculate the sensitivity d'.
 
 ## lmm for simple effects of Congruency 
 It is also testing the interaction between Congruency and Answer.
@@ -88,6 +87,7 @@ df_resp_2inter <- model.matrix(~ Condition * Alignment / Congruency * answer, df
   as_tibble() %>% 
   cbind(df_raw, .)
 ```
+`df_resp_2inter` was created to facilitate simplifying random effects later.
 
 ### The maximal model
 ```{r resp1 max d }
@@ -164,7 +164,7 @@ print(summary(glmm_resp1_zcp), corr = FALSE)
 summary(rePCA(glmm_resp1_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.
 
 ```{r resp1 rdc d }
 file_resp1_rdc <- file.path(folder_out, "Resp1_lmm_rdc.RData")
@@ -280,7 +280,6 @@ print(summary(glmm_resp1_etd1), corr = FALSE)
 anova(glmm_resp1_etd1, glmm_resp1_rdc, refit = FALSE)
 ```
 
-
 ```{r the optimal model resp1 d}
 glmm_resp1_opt <- glmm_resp1_etd1
 
@@ -291,10 +290,11 @@ The above results (the third last row) showed that the sensitivity d' is larger 
 ## lmm for simple effects of Congruency 
 It is also testing the interaction between Congruency and Answer.
 ```{r}
-df_resp_3inter <- model.matrix(~ Condition / Congruency * Alignment  * answer, df_raw) %>% 
+df_resp_3inter <- model.matrix(~ Condition / Congruency * Alignment * answer, df_raw) %>% 
   as_tibble() %>% 
   cbind(df_raw, .)
 ```
+`df_resp_3inter` was created to facilitate simplifying random effects later.
 
 ### The maximal model
 ```{r resp2 max d }
@@ -371,7 +371,7 @@ print(summary(glmm_resp2_zcp), corr = FALSE)
 summary(rePCA(glmm_resp2_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.
 
 ```{r resp2 rdc d }
 file_resp2_rdc <- file.path(folder_out, "Resp2_lmm_rdc.RData")
@@ -534,21 +534,19 @@ print(summary(glmm_resp2_opt), corr = FALSE)
 The above results (the last row) showed that in the monocular condition, sensitivity d' difference between congruent and incongruent trials was larger for aligned relative to misaligned faces.  
 
 ## lmm for comparing composite effects in CFS and monocular conditions
-This analysis will not be repeated; it is the same as that used in `lmm_CF_emmeans.Rmd` file (around Line 276). 
+This analysis will not be repeated; it is the same as that used in `lmm_CF_emmeans.Rmd` file (around Line 279). 
 
 In short, we observed that the composite effect was larger in the monocular relative to CFS condition.
 
 ## Summary
 With the above three glmm, we observed (1) composite face effect in the monocular condition and (2) it was larger than that in the CFS condition.
 
-# Lognormal
-
+# RT: Lognormal
 ```{r}
 # make the level names shorter
 df_rt <- df_raw %>% 
   filter(isCorrect == 1)
 ```
-
 
 ## lmm for simple effects of Congruency 
 ```{r}
@@ -556,6 +554,8 @@ df_rt_sim <- model.matrix(~ Condition * Alignment / Congruency, df_rt) %>%
   as_tibble() %>% 
   cbind(df_rt, .)
 ```
+`df_rt_sim` was created to facilitate simplifying random effects later.
+
 ### The maximal model
 ```{r rt1 max}
 # file_rt1_max <- file.path(folder_out, "RT1_lmm_max.RData")
@@ -615,7 +615,7 @@ print(summary(lmm_rt1_zcp), corr = FALSE)
 summary(rePCA(lmm_rt1_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
+Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.
 
 ```{r  rt1 rdc}
 file_rt1_rdc <- file.path(folder_out, "RT1_lmm_rdc.RData")
@@ -691,6 +691,7 @@ df_rt_cf <- model.matrix(~ Condition / Congruency * Alignment, df_rt) %>%
   as_tibble() %>% 
   cbind(df_rt, .)
 ```
+`df_rt_cf` was created to facilitate simplifying random effects later.
 
 ### The maximal model
 ```{r rt2 max}
@@ -751,8 +752,7 @@ print(summary(lmm_rt2_zcp), corr = FALSE)
 summary(rePCA(lmm_rt2_zcp))
 ```
 
-Random effect that explained less than 0.1% variances were removed from the zcp model, resulting in the reduced model.
-
+Random effect that explained less than 0.1% variances were removed from the zcp model, leading to the reduced model.
 ```{r  rt2 rdc}
 file_rt2_rdc <- file.path(folder_out, "RT2_lmm_rdc.RData")
 
