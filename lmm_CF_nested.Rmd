@@ -25,6 +25,7 @@ library(lme4)
 library(lmerTest)
 library(optimx)
 library(emmeans)
+library(arrow)
 
 # set the contrast coding
 options(contrasts = rep("contr.sdif", 2))
@@ -88,6 +89,11 @@ df_resp_2inter <- model.matrix(~ Condition * Alignment / Congruency * answer, df
   cbind(df_raw, .)
 ```
 `df_resp_2inter` was created to facilitate simplifying random effects later.
+
+```{r}
+# save data as arrow
+write_arrow(df_resp_2inter, file.path("data", "example_con.arrow"))
+```
 
 ### The maximal model
 ```{r resp1 max d }
