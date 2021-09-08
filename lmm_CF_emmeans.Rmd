@@ -29,6 +29,7 @@ library(lme4)
 library(lmerTest)
 library(optimx)
 library(emmeans)
+library(arrow)
 
 # set the contrast coding
 options(contrasts = rep("contr.sdif", 2))
@@ -90,6 +91,10 @@ df_emm <- df_raw %>%
   cbind(df_raw, .)
 ```
 
+```{r}
+# save data as arrow
+write_arrow(df_emm, file.path("data", "example_sd.arrow"))
+```
 
 # Sensitivity d': GLMM with probit link
 This section analyzes the behavioral responses with signal detection theory (with `probit` link): `same` and `different` trials are used as `signal` and `noise` to calculate the sensitivity d'.

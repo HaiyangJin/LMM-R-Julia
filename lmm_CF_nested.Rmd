@@ -92,7 +92,7 @@ df_resp_2inter <- model.matrix(~ Condition * Alignment / Congruency * answer, df
 
 ```{r}
 # save data as arrow
-write_arrow(df_resp_2inter, file.path("data", "example_con.arrow"))
+write_arrow(df_resp_2inter, file.path("data", "example_nested.arrow"))
 ```
 
 ### The maximal model
