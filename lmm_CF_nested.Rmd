@@ -10,14 +10,26 @@ output:
     toc_float: true
 ---
 
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
 ```{r global_options, echo = FALSE, include = FALSE}
-options(width = 2000)
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = TRUE,
-                      cache = FALSE, tidy = FALSE, size = "small")
+options(width = 1500)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
+                      include = TRUE, cache = FALSE, tidy = FALSE, 
+                      size = "big", fig.width=8, fig.asp=0.7)
+xaringanExtra::use_clipboard()
 ```
 
 # Preparation
-```{r setup and load the related libraries, include=FALSE}
+```{r setup, include=FALSE}
 library(tidyverse)
 library(hypr)
 library(MASS)
@@ -46,7 +58,7 @@ options(contrasts = rep("contr.sdif", 2))
 #   mutate(Participant = sprintf("Subj%02d", as.numeric(Participant)))
 # write_csv(df_tmp, file = file.path("data", "example_data.csv"))
 
-folder_out <- "cache"
+folder_out <- "output"
 
 df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
   mutate(Condition = if_else(Condition=="monocular", "mon", Condition),
@@ -92,42 +104,7 @@ df_resp_2inter <- model.matrix(~ Condition * Alignment / Congruency * answer, df
 
 ```{r}
 # save data as arrow
-write_arrow(df_resp_2inter, file.path("data", "example_nested.arrow"))
-```
-
-### The maximal model
-```{r resp1 max d }
-# file_resp1_max <- file.path(folder_out, "Resp1_lmm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_resp1_max)) {
-#   glmm_resp1_max <- glmer(resp ~ Condition * Alignment / Congruency * answer +
-#                            (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
-#                               `Conditionmon-CFS:Alignmentali-mis` +
-#                               `Conditionmon-CFS:answersam-dif` +
-#                               `Alignmentali-mis:answersam-dif` +
-#                               `ConditionCFS:Alignmentali:Congruencycon-inc` +
-#                               `Conditionmon:Alignmentali:Congruencycon-inc` +
-#                               `ConditionCFS:Alignmentmis:Congruencycon-inc` +
-#                               `Conditionmon:Alignmentmis:Congruencycon-inc` +
-#                               `Conditionmon-CFS:Alignmentali-mis:answersam-dif` +
-#                               `ConditionCFS:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
-#                               `Conditionmon:Alignmentali:Congruencycon-inc:answersam-dif` + # interest
-#                               `ConditionCFS:Alignmentmis:Congruencycon-inc:answersam-dif` +
-#                               `Conditionmon:Alignmentmis:Congruencycon-inc:answersam-dif`
-#                               | Participant),
-#     family = binomial(link = "probit"),
-#     data = df_resp_2inter,
-#     control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-# 
-#   save(glmm_resp1_max, file = file_resp1_max)
-# } else {
-#   load(file_resp1_max)
-# }
-# 
-# print(summary(glmm_resp1_max), corr = FALSE)
+# write_arrow(df_resp_2inter, file.path("data", "example_nested.arrow"))
 ```
 
 ### The zero-correlation-parameter model
@@ -301,41 +278,6 @@ df_resp_3inter <- model.matrix(~ Condition / Congruency * Alignment * answer, df
   cbind(df_raw, .)
 ```
 `df_resp_3inter` was created to facilitate simplifying random effects later.
-
-### The maximal model
-```{r resp2 max d }
-# file_resp2_max <- file.path(folder_out, "Resp2_lmm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_resp2_max)) {
-#   glmm_resp2_max <- glmer(resp ~ Condition / Congruency * Alignment  * answer +
-#                            (`Conditionmon-CFS` + `Alignmentali-mis` + `answersam-dif` +
-#                               `ConditionCFS:Congruencycon-inc` +
-#                               `Conditionmon:Congruencycon-inc` +
-#                               `Conditionmon-CFS:Alignmentali-mis` +
-#                               `Conditionmon-CFS:answersam-dif` +
-#                               `Alignmentali-mis:answersam-dif` +
-#                               `ConditionCFS:Congruencycon-inc:Alignmentali-mis` +
-#                               `Conditionmon:Congruencycon-inc:Alignmentali-mis` +
-#                               `ConditionCFS:Congruencycon-inc:answersam-dif` +
-#                               `Conditionmon:Congruencycon-inc:answersam-dif` + 
-#                               `Conditionmon-CFS:Alignmentali-mis:answersam-dif` + 
-#                               `ConditionCFS:Congruencycon-inc:Alignmentali-mis:answersam-dif` + # interest
-#                               `Conditionmon:Congruencycon-inc:Alignmentali-mis:answersam-dif` # interest
-#                               | Participant),
-#     family = binomial(link = "probit"),
-#     data = df_resp_3inter,
-#     control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                            optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-# 
-#   save(glmm_resp2_max, file = file_resp2_max)
-# } else {
-#   load(file_resp2_max)
-# }
-# 
-# print(summary(glmm_resp2_max), corr = FALSE)
-```
 
 ### The zero-correlation-parameter model
 ```{r resp2 zcp d }
@@ -562,33 +504,6 @@ df_rt_sim <- model.matrix(~ Condition * Alignment / Congruency, df_rt) %>%
 ```
 `df_rt_sim` was created to facilitate simplifying random effects later.
 
-### The maximal model
-```{r rt1 max}
-# file_rt1_max <- file.path(folder_out, "RT1_lmm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_rt1_max)) {
-#   lmm_rt1_max <- lmer(log(RT) ~ Condition * Alignment / Congruency +
-#                         (`Conditionmon-CFS` + `Alignmentali-mis` + 
-#                            `Conditionmon-CFS:Alignmentali-mis` +
-#                            `ConditionCFS:Alignmentali:Congruencycon-inc` + # interest
-#                            `Conditionmon:Alignmentali:Congruencycon-inc` + # interest
-#                            `ConditionCFS:Alignmentmis:Congruencycon-inc` +
-#                            `Conditionmon:Alignmentmis:Congruencycon-inc`
-#                          | Participant),
-#                       data = df_rt_sim,
-#                       control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                                             optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-# 
-#   save(lmm_rt1_max, file = file_rt1_max)
-# } else {
-#   load(file_rt1_max)
-# }
-# 
-# print(summary(lmm_rt1_max), corr = FALSE)
-```
-
 ### The zero-correlation-parameter model
 ```{r rt1 zcp}
 file_rt1_zcp <- file.path(folder_out, "RT1_lmm_zcp.RData")
@@ -698,33 +613,6 @@ df_rt_cf <- model.matrix(~ Condition / Congruency * Alignment, df_rt) %>%
   cbind(df_rt, .)
 ```
 `df_rt_cf` was created to facilitate simplifying random effects later.
-
-### The maximal model
-```{r rt2 max}
-# file_rt2_max <- file.path(folder_out, "RT2_lmm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_rt2_max)) {
-#   lmm_rt2_max <- lmer(log(RT) ~ Condition / Congruency * Alignment +
-#                         (`Conditionmon-CFS` + `Alignmentali-mis` +
-#                            `ConditionCFS:Congruencycon-inc` +
-#                            `Conditionmon:Congruencycon-inc` +
-#                            `Conditionmon-CFS:Alignmentali-mis` +
-#                            `ConditionCFS:Congruencycon-inc:Alignmentali-mis` + # interest
-#                            `Conditionmon:Congruencycon-inc:Alignmentali-mis`  # interest
-#                          | Participant),
-#                       data = df_rt_cf,
-#                       control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                                             optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-# 
-#   save(lmm_rt2_max, file = file_rt2_max)
-# } else {
-#   load(file_rt2_max)
-# }
-# 
-# print(summary(lmm_rt2_max), corr = FALSE)
-```
 
 ### The zero-correlation-parameter model
 ```{r rt2 zcp}

@@ -10,20 +10,27 @@ output:
     toc_float: true
 ---
 
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
 ```{r global_options, echo = FALSE, include = FALSE}
 options(width = 1500)
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, include = TRUE,
-                      cache = FALSE, tidy = FALSE, size = "small")
-```
-
-```{r xaringanExtra-clipboard, echo=FALSE}
-xaringanExtra::use_clipboard() 
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
+                      include = TRUE, cache = FALSE, tidy = FALSE, 
+                      size = "big", fig.width=8, fig.asp=0.7)
+xaringanExtra::use_clipboard()
 ```
 
 # Preparation
-```{r setup and load the related libraries, include=FALSE}
+```{r setup, include=FALSE}
 library(tidyverse)
-library(hypr)
 library(MASS)
 library(lme4)
 library(lmerTest)
@@ -57,13 +64,14 @@ Moreover, for the third question, we also need to examine whether the composite 
 ## Prepare data
 Load and set the default levels for the factors:
 ```{r read the data file}
-folder_out <- "cache"
+folder_out <- "output"
 
 df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
   mutate(Condition = factor(Condition, levels = c("monocular", "CFS")),
          Congruency = factor(Congruency, levels = c("congruent", "incongruent")),
          Alignment = factor(Alignment, levels = c("aligned", "misaligned")),
-         answer = factor(answer, levels = c("same", "different")))
+         answer = factor(answer, levels = c("same", "different")),
+         logRT = log(RT))
 head(df_raw)
 ```
 
@@ -88,43 +96,18 @@ df_emm <- df_raw %>%
             Cong_Ali_Ans = `Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`,
             Cond_Cong_Ali_Ans = `ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`
             ) %>% 
-  cbind(df_raw, .)
+  cbind(df_raw, .) 
 ```
 
 ```{r}
 # save data as arrow
-write_arrow(df_emm, file.path("data", "example_sd.arrow"))
+# write_arrow(df_emm, file.path("data", "example_sd.arrow"))
 ```
 
 # Sensitivity d': GLMM with probit link
 This section analyzes the behavioral responses with signal detection theory (with `probit` link): `same` and `different` trials are used as `signal` and `noise` to calculate the sensitivity d'.
 
 ## Fitting the glmm
-
-### The maximal model
-```{r resp max d }
-# file_resp_max <- file.path(folder_out, "Resp_lmm_emm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_resp_max)) {
-#   glmm_resp_max <- glmer(resp ~ Condition * Congruency * Alignment * answer +
-#                            (Cond_main + Cong_main + Ali_main + Ans_main + 
-#                               Cond_Cong + Cond_Ali + Cong_Ali + Cond_Ans + Cong_Ans + Ali_Ans +
-#                               Cond_Cong_Ali + Cond_Cong_Ans + Cond_Ali_Ans + Cong_Ali_Ans +
-#                               Cond_Cong_Ali_Ans | Participant),
-#                          family = binomial(link = "probit"),
-#                          data = df_emm,
-#                          control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                                                 optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-#   
-#   save(glmm_resp_max, file = file_resp_max)
-# } else {
-#   load(file_resp_max)
-# }
-# 
-# print(summary(glmm_resp_max), corr = FALSE)
-```
 
 ### The zero-correlation-parameter model
 ```{r resp zcp }
@@ -167,7 +150,7 @@ if (!file.exists(file_resp_rdc)) {
                            (Cond_main + Cong_main + Ali_main + Ans_main +
                               Cond_Ali + Cond_Ans + Cong_Ans + Ali_Ans + # Cond_Cong + Cong_Ali + 
                               Cond_Cong_Ali + Cong_Ali_Ans # +  Cond_Cong_Ans + Cond_Ali_Ans + 
-                               || Participant), # Cond_Cong_Ali_Ans
+                            || Participant), # Cond_Cong_Ali_Ans
                          family = binomial(link = "probit"),
                          data = df_emm,
                          control = glmerControl(optimizer = "optimx", # calc.derivs = FALSE,
@@ -324,31 +307,7 @@ With all above evidence of responses, we may claim (2) the composite face effect
 # RT: Lognormal
 This sections analyzes response times of correct trials with log-normal transformation.
 
-## Fitting the glmm
-### The maximal model
-```{r  rt max}
-# file_rt_max <- file.path(folder_out, "RT_lmm_emm_max.RData")
-# 
-# # fit the max model
-# if (!file.exists(file_rt_max)) {
-#   lmm_rt_max <- lmer(log(RT) ~ Condition * Congruency * Alignment +
-#                           (Cond_main + Cong_main + Ali_main + 
-#                              Cond_Cong + Cond_Ali + Cong_Ali + 
-#                              Cond_Cong_Ali | Participant),
-#                         data = filter(df_emm, isCorrect==1),
-#                         control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-#                                               optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
-#   )
-# 
-#   save(lmm_rt_max, file = file_rt_max)
-# } else {
-#   load(file_rt_max)
-# }
-# 
-# print(summary(lmm_rt_max), corr = FALSE)
-```
-
-
+## Fitting the lmm
 ### The zero-correlation-parameter model
 ```{r  rt zcp}
 file_rt_zcp <- file.path(folder_out, "RT_lmm_emm_zcp.RData")
@@ -356,12 +315,12 @@ file_rt_zcp <- file.path(folder_out, "RT_lmm_emm_zcp.RData")
 # fit the zcp model
 if (!file.exists(file_rt_zcp)) {
   lmm_rt_zcp <- lmer(log(RT) ~ Condition * Congruency * Alignment +
-                          (Cond_main + Cong_main + Ali_main +
-                             Cond_Cong + Cond_Ali + Cong_Ali +
-                             Cond_Cong_Ali || Participant),
-                        data = filter(df_emm, isCorrect==1),
-                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+                       (Cond_main + Cong_main + Ali_main +
+                          Cond_Cong + Cond_Ali + Cong_Ali +
+                          Cond_Cong_Ali || Participant),
+                     data = filter(df_emm, isCorrect==1),
+                     control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
   )
 
   save(lmm_rt_zcp, file = file_rt_zcp)
@@ -385,12 +344,12 @@ file_rt_rdc <- file.path(folder_out, "RT_lmm_emm_rdc.RData")
 # fit the rdc model
 if (!file.exists(file_rt_rdc)) {
   lmm_rt_rdc <- lmer(log(RT) ~ Condition * Congruency * Alignment +
-                          (Cond_main + # + Cong_main + Ali_main +
-                              Cond_Ali # + Cond_Cong + Cong_Ali +
-                             || Participant), # Cond_Cong_Ali 
-                        data = filter(df_emm, isCorrect==1),
-                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+                       (Cond_main + # + Cong_main + Ali_main +
+                          Cond_Ali # + Cond_Cong + Cong_Ali +
+                        || Participant), # Cond_Cong_Ali 
+                     data = filter(df_emm, isCorrect==1),
+                     control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
   )
 
   save(lmm_rt_rdc, file = file_rt_rdc)
@@ -408,12 +367,12 @@ file_rt_etd <- file.path(folder_out, "RT_lmm_emm_etd.RData")
 # fit the etd model
 if (!file.exists(file_rt_etd)) {
   lmm_rt_etd <- lmer(log(RT) ~ Condition * Congruency * Alignment +
-                          (Cond_main + # + Cong_main + Ali_main +
-                              Cond_Ali # + Cond_Cong + Cong_Ali +
-                             | Participant), # Cond_Cong_Ali 
-                        data = filter(df_emm, isCorrect==1),
-                        control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
-                                              optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
+                       (Cond_main + # + Cong_main + Ali_main +
+                          Cond_Ali # + Cond_Cong + Cong_Ali +
+                        | Participant), # Cond_Cong_Ali 
+                     data = filter(df_emm, isCorrect==1),
+                     control = lmerControl(optimizer = "optimx", # calc.derivs = FALSE,
+                                           optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE))
   )
 
   save(lmm_rt_etd, file = file_rt_etd)
@@ -466,5 +425,4 @@ With the above evidence of response times, (1) we failed to observe the evidence
 ```{r}
 sessionInfo()
 ```
-
 

@@ -10,14 +10,28 @@ output:
     toc_float: true
 ---
 
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
 ```{r global_options, echo = FALSE, include = FALSE}
-options(width = 2000)
-knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, include = TRUE,
-                      cache = FALSE, tidy = FALSE, size = "small")
+options(width = 1500)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
+                      include = TRUE, cache = FALSE, tidy = FALSE, 
+                      size = "big", fig.width=8, fig.asp=0.7)
+xaringanExtra::use_clipboard()
 ```
 
+** This approach does not work for this study. **
+
 # Preparation
-```{r setup and load the related libraries, include=FALSE}
+```{r setup, include=FALSE}
 library(tidyverse)
 library(hypr)
 library(MASS)
@@ -113,6 +127,7 @@ Error in stats::`contrasts<-`(`*tmp*`, value = cm) : singular contrast matrix
 
 **Question**: According to the research question, I need to test the five effects discussed earlier (i.e., the first five columns in `hypr_resp`). How should I decide the other (10) effects tested in the model?
 
+*Answer*: It is not feasible for testing those five effets in the same model.
 
 # Lognormal
 
