@@ -67,10 +67,10 @@ Load and set the default levels for the factors:
 folder_out <- "output"
 
 df_raw <-  read_csv(file.path("data", "example_data.csv")) %>% 
-  mutate(Condition = factor(Condition, levels = c("monocular", "CFS")),
-         Congruency = factor(Congruency, levels = c("congruent", "incongruent")),
-         Alignment = factor(Alignment, levels = c("aligned", "misaligned")),
-         answer = factor(answer, levels = c("same", "different")),
+  mutate(Condition = factor(Condition, levels = c("CFS", "monocular")),
+         Congruency = factor(Congruency, levels = c("incongruent", "congruent")),
+         Alignment = factor(Alignment, levels = c("misaligned", "aligned")),
+         answer = factor(answer, levels = c("different", "same")),
          logRT = log(RT))
 head(df_raw)
 ```
@@ -80,28 +80,28 @@ head(df_raw)
 df_emm <- df_raw %>% 
   model.matrix(~ Condition * Congruency * Alignment * answer, .) %>% 
   as_tibble() %>% 
-  transmute(Cond_main = `ConditionCFS-monocular`,
-            Cong_main = `Congruencyincongruent-congruent`,
-            Ali_main = `Alignmentmisaligned-aligned`,
-            Ans_main = `answerdifferent-same`,
-            Cond_Cong = `ConditionCFS-monocular:Congruencyincongruent-congruent`,
-            Cond_Ali = `ConditionCFS-monocular:Alignmentmisaligned-aligned`,
-            Cong_Ali = `Congruencyincongruent-congruent:Alignmentmisaligned-aligned`,
-            Cond_Ans = `ConditionCFS-monocular:answerdifferent-same`,
-            Cong_Ans = `Congruencyincongruent-congruent:answerdifferent-same`,
-            Ali_Ans = `Alignmentmisaligned-aligned:answerdifferent-same`,
-            Cond_Cong_Ali = `ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned`,
-            Cond_Cong_Ans = `ConditionCFS-monocular:Congruencyincongruent-congruent:answerdifferent-same`,
-            Cond_Ali_Ans = `ConditionCFS-monocular:Alignmentmisaligned-aligned:answerdifferent-same`,
-            Cong_Ali_Ans = `Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`,
-            Cond_Cong_Ali_Ans = `ConditionCFS-monocular:Congruencyincongruent-congruent:Alignmentmisaligned-aligned:answerdifferent-same`
+  transmute(Cond_main = `Conditionmonocular-CFS`,
+            Cong_main = `Congruencycongruent-incongruent`,
+            Ali_main = `Alignmentaligned-misaligned`,
+            Ans_main = `answersame-different`,
+            Cond_Cong = `Conditionmonocular-CFS:Congruencycongruent-incongruent`,
+            Cond_Ali = `Conditionmonocular-CFS:Alignmentaligned-misaligned`,
+            Cong_Ali = `Congruencycongruent-incongruent:Alignmentaligned-misaligned`,
+            Cond_Ans = `Conditionmonocular-CFS:answersame-different`,
+            Cong_Ans = `Congruencycongruent-incongruent:answersame-different`,
+            Ali_Ans = `Alignmentaligned-misaligned:answersame-different`,
+            Cond_Cong_Ali = `Conditionmonocular-CFS:Congruencycongruent-incongruent:Alignmentaligned-misaligned`,
+            Cond_Cong_Ans = `Conditionmonocular-CFS:Congruencycongruent-incongruent:answersame-different`,
+            Cond_Ali_Ans = `Conditionmonocular-CFS:Alignmentaligned-misaligned:answersame-different`,
+            Cong_Ali_Ans = `Congruencycongruent-incongruent:Alignmentaligned-misaligned:answersame-different`,
+            Cond_Cong_Ali_Ans = `Conditionmonocular-CFS:Congruencycongruent-incongruent:Alignmentaligned-misaligned:answersame-different`
             ) %>% 
   cbind(df_raw, .) 
 ```
 
 ```{r}
 # save data as arrow
-# write_arrow(df_emm, file.path("data", "example_sd.arrow"))
+# write_feather(df_emm, file.path("data", "example_sd.arrow"))
 ```
 
 # Sensitivity d': GLMM with probit link
