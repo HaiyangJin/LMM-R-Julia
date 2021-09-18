@@ -1,32 +1,82 @@
 
 ## Setup
+using Random, Printf
 using DataFrames, DataFrameMacros, Chain, Arrow, AlgebraOfGraphics, CairoMakie
-using StatsModels, MixedModels, MixedModelsMakie, Random
+using StatsModels, MixedModels, MixedModelsMakie
 AOG = AlgebraOfGraphics;
 
 # Load data
 df_cf = DataFrame(Arrow.Table("data/example_sd.arrow"))
+
 contr = Dict(
     :Participant => Grouping(),
     :Condition => SeqDiffCoding(levels = ["CFS", "monocular"]),
     :Congruency => SeqDiffCoding(levels = ["incongruent", "congruent"]),
-    :Aligment => SeqDiffCoding(levels = ["misaligned", "aligned"]),
+    :Alignment => SeqDiffCoding(levels = ["misaligned", "aligned"]),
     :answer => SeqDiffCoding(levels = ["different", "same"]),
 );
 
 # Make varaibles for reducing random effects
-df_contra = @chain df_cf begin
-    ModelFrame(@formula(resp ~ Condition * Congruency * Alignment * answer),
-               _,
-               contrasts = contr,)
+f_tmp = ModelFrame(@formula(resp ~ Condition * Congruency * Alignment * answer),
+            df_cf, contrasts = contr);
+# coefnames(f_tmp)
+
+df_contra = @chain f_tmp begin
     modelmatrix
-    DataFrame([:intercept,
-        :cond_main, :cong_main, :ali_main, :ans_main, 
-        :cond_cong, :cond_ali, :cond_ans, :cong_ali, :cong_ans, :ali_ans,
-        :cond_cong_ali, :cond_cong_ans, :cond_ali_ans, :cong_ali_ans,
-        :cond_cong_ali_ans])
-    hcat(df_cf, _)
-    @transform(:logRT = log(:RT))
+    DataFrame(coefnames(f_tmp))
+    rename(
+        Symbol("(Intercept)") => :intercept,
+        Symbol("Condition: monocular") => :Cond_main,
+        Symbol("Congruency: congruent") => :Cong_main,
+        Symbol("Alignment: aligned") => :Ali_main,
+        Symbol("answer: same") => :Ans_main,
+        Symbol("Condition: monocular & Congruency: congruent") => :Cond_Cong,
+        Symbol("Condition: monocular & Alignment: aligned") => :Cond_Ali,
+        Symbol("Congruency: congruent & Alignment: aligned") => :Cong_Ali,
+        Symbol("Condition: monocular & answer: same") => :Cond_Ans,
+        Symbol("Congruency: congruent & answer: same") => :Cong_Ans,
+        Symbol("Alignment: aligned & answer: same") => :Ali_Ans,
+        Symbol("Condition: monocular & Congruency: congruent & Alignment: aligned") => :Cond_Cong_Ali,
+        Symbol("Condition: monocular & Congruency: congruent & answer: same") => :Cond_Cong_Ans,
+        Symbol("Condition: monocular & Alignment: aligned & answer: same") => :Cond_Ali_Ans,
+        Symbol("Congruency: congruent & Alignment: aligned & answer: same") => :Cong_Ali_Ans,
+        Symbol("Condition: monocular & Congruency: congruent & Alignment: aligned & answer: same") => :Cond_Cong_Ali_Ans
+    )
+    # @transform(:coefname = 
+	# 	:coefname == "(Intercept)" ? "intercept" :
+	# 	:coefname == "Condition: monocular" ? "Cond_main" :
+	# 	:coefname == "Congruency: congruent" ? "Cong_main" :
+	# 	:coefname == "Alignment: aligned" ? "Ali_main" :
+    #   :coefname == "answer: same" ? "Ans_main" :
+	# 	:coefname == "Condition: monocular & Congruency: congruent" ? "Cond_Cong" :
+	# 	:coefname == "Condition: monocular & Alignment: aligned" ? "Cond_Ali" :
+	# 	:coefname == "Congruency: congruent & Alignment: aligned" ? "Cong_Ali" :
+    #   :coefname == "Condition: monocular & answer: same" ? " Cond_Ans" :
+    #   :coefname == "Congruency: congruent & answer: same" ? "Cong_Ans" :
+    #   :coefname == "Alignment: aligned & answer: same" ? "Ali_Ans" :
+	# 	:coefname == "Condition: monocular & Congruency: congruent & Alignment: aligned" ? "Cond_Cong_Ali" :
+    #   :coefname == "Condition: monocular & Congruency: congruent & answer: same" ? "Cond_Cong_Ans" :
+    #   :coefname == "Condition: monocular & Alignment: aligned & answer: same" ? "Cond_Ali_Ans" :
+    #   :coefname == "Congruency: congruent & Alignment: aligned & answer: same" ? "Cong_Ali_Ans" :
+    #   :coefname == "Condition: monocular & Congruency: congruent & Alignment: aligned & answer: same" ? "Cond_Cong_Ali_Ans" :
+	# "unknown")
+    # DataFrame([:intercept,
+    #     :Cond_main, :Cong_main, :Ali_main, :Ans_main, 
+    #     :Cond_Cong, :Cond_Ali, :Cond_Ans, :Cong_Ali, :Cong_Ans, :Ali_Ans,
+    #     :Cond_Cong_Ali, :Cond_Cong_Ans, :Cond_Ali_Ans, :Cong_Ali_Ans,
+    #     :Cond_Cong_Ali_Ans])
+    select(Not(:intercept))
+end
+
+# compare contrast in Julia and R
+df_r_con = select(df_cf, r"_")  # contrast from R
+sum(names(df_r_con) .== names(df_contra))  # same column names
+df_r_con == df_contra # values are the same
+
+# concatenate 
+df_lmm = @chain df_cf begin
+    select!(Not(r"_"))
+    hcat(df_contra)
 end
 
 ## Behavioral responses
@@ -35,11 +85,10 @@ end
 # (an equivalent) ZCP model
 f_resp_zcp_ = @formula(resp ~ Condition * Congruency * Alignment * answer +
         zerocorr(Condition * Congruency * Alignment * answer | Participant));
-
 glmm_resp_zcp_ = fit(
     MixedModel, 
     f_resp_zcp_, 
-    df_contra, 
+    df_lmm, 
     Bernoulli(), 
     ProbitLink(), 
     contrasts = contr)
@@ -48,15 +97,15 @@ issingular(glmm_resp_zcp_)
 
 # ZCP model
 f_resp_zcp = @formula(resp ~ Condition * Congruency * Alignment * answer +
-		zerocorr(cond_main + cong_main + ali_main + ans_main +
-			cond_cong + cond_ali + cond_ans + cong_ali + cong_ans + ali_ans +
-			cond_cong_ali + cond_cong_ans + cond_ali_ans + cong_ali_ans +
-			cond_cong_ali_ans | Participant));
+		zerocorr(Cond_main + Cong_main + Ali_main + Ans_main +
+			Cond_Cong + Cond_Ali + Cond_Ans + Cong_Ali + Cong_Ans + Ali_Ans +
+			Cond_Cong_Ali + Cond_Cong_Ans + Cond_Ali_Ans + Cong_Ali_Ans +
+			Cond_Cong_Ali_Ans | Participant));
 	
 glmm_resp_zcp = fit(
 	MixedModel, 
 	f_resp_zcp, 
-	df_contra,
+	df_lmm,
 	Bernoulli(),
 	ProbitLink(),
     contrasts = contr)
@@ -68,15 +117,15 @@ VarCorr(glmm_resp_zcp)
 
 # Reduced model
 f_resp_rdc = @formula(resp ~ Condition * Congruency * Alignment * answer +
-		zerocorr(cond_main + cong_main + ali_main + ans_main +
-			cond_ali + cong_ali + cong_ans + # ali_ans + cond_ans + cond_cong + 
-			cong_ali_ans # + cond_ali_ans + cond_cong_ans + cond_cong_ali + 
-			| Participant)); # cond_cong_ali_ans
+		zerocorr(Cond_main + Cong_main + Ali_main + Ans_main +
+			Cond_Ali + Cong_Ali + Cong_Ans + # Ali_Ans + Cond_Ans + Cond_Cong + 
+			Cong_Ali_Ans # + Cond_Ali_Ans + Cond_Cong_Ans + Cond_Cong_Ali + 
+			| Participant)); # Cond_Cong_Ali_Ans
 	
 glmm_resp_rdc = fit(
     MixedModel, 
     f_resp_rdc, 
-    df_contra,
+    df_lmm,
     Bernoulli(),
     ProbitLink(),
     contrasts = contr)
@@ -85,15 +134,15 @@ issingular(glmm_resp_rdc)
 
 # Extended model
 f_resp_etd = @formula(resp ~ Condition * Congruency * Alignment * answer +
-        (cond_main + cong_main + ali_main + ans_main +
-            cond_ali + cong_ali + cong_ans + # ali_ans + cond_ans + cond_cong + 
-            cong_ali_ans # + cond_ali_ans + cond_cong_ans + cond_cong_ali + 
-            | Participant)); # cond_cong_ali_ans
+        (Cond_main + Cong_main + Ali_main + Ans_main +
+            Cond_Ali + Cong_Ali + Cong_Ans + # Ali_Ans + Cond_Ans + Cond_Cong + 
+            Cong_Ali_Ans # + Cond_Ali_Ans + Cond_Cong_Ans + Cond_Cong_Ali + 
+            | Participant)); # Cond_Cong_Ali_Ans
 	
 glmm_resp_etd = fit(
     MixedModel, 
     f_resp_etd, 
-    df_contra,
+    df_lmm,
     Bernoulli(),
     ProbitLink(),
     contrasts = contr)
@@ -116,13 +165,27 @@ DataFrame(
 # glmm_resp_rdc is used as the optimal model
 glmm_resp_opt = glmm_resp_rdc 
 
-# bootstrap (to be finished)
-bs_resp1 = parametricbootstrap(MersenneTwister(42), 2, glmm_resp_opt);
-# bs_resp1.allpars
+# bootstrap (save multiple files)
+# this loops took more than 10 hours
+# for i in 1:10
+#     bs_resp = parametricbootstrap(MersenneTwister(42+i), 400, glmm_resp_opt)
+#     Arrow.write(@sprintf("output_jl/bs_resp_%d.arrow", i), DataFrame(bs_resp.allpars))
+# end
+
+# the rest analysis for responses is done in lmm_CF_jl.Rmd
+
+# design = Dict(
+#     :answer => ["same", "different"],
+# 		:Alignment => ["aligned", "misaligned"],
+# 		:Congruency => ["congruent", "incongruent"],
+# 		:Condition => ["monocular", "CFS"],
+# )
+# preds = effects(design, glmm_resp_opt)
+
 
 #################################
 ## Response times
-df_rt = @subset(df_contra, :isCorrect == 1)
+df_rt = @subset(df_lmm, :isCorrect == 1)
 
 # (an equivalent) ZCP model
 f_rt_zcp_ = @formula(logRT ~ Condition * Congruency * Alignment +
@@ -138,9 +201,9 @@ issingular(lmm_rt_zcp_)
 
 # ZCP model
 f_rt_zcp = @formula(logRT ~ Condition * Congruency * Alignment +
-		zerocorr(cond_main + cong_main + ali_main + 
-			cond_cong + cond_ali + cong_ali + 
-			cond_cong_ali | Participant));
+		zerocorr(Cond_main + Cong_main + Ali_main + 
+			Cond_Cong + Cond_Ali + Cong_Ali + 
+			Cond_Cong_Ali | Participant));
 	
 lmm_rt_zcp = fit(
     MixedModel, 
@@ -155,9 +218,9 @@ VarCorr(lmm_rt_zcp)
 
 # Reduced model
 f_rt_rdc = @formula(logRT ~ Condition * Congruency * Alignment +
-		zerocorr(cond_main + # cong_main + ali_main + 
-			cond_ali + cong_ali # + cond_cong + 
-			| Participant)); # cond_cong_ali
+		zerocorr(Cond_main + # Cong_main + Ali_main + 
+			Cond_Ali + Cong_Ali # + Cond_Cong + 
+			| Participant)); # Cond_Cong_Ali
 	
 lmm_rt_rdc = fit(
     MixedModel, 
@@ -169,9 +232,9 @@ issingular(lmm_rt_rdc)
 
 # Extended model
 f_rt_etd = @formula(logRT ~ Condition * Congruency * Alignment +
-        (cond_main + # cong_main + ali_main + 
-            cond_ali + cong_ali # + cond_cong + 
-            | Participant)); # cond_cong_ali
+        (Cond_main + # Cong_main + Ali_main + 
+            Cond_Ali + Cong_Ali # + Cond_Cong + 
+            | Participant)); # Cond_Cong_Ali
 
 lmm_rt_etd = fit(
     MixedModel, 
@@ -186,9 +249,9 @@ VarCorr(lmm_rt_etd)
 
 # Extended model 2
 f_rt_etd2 = @formula(logRT ~ Condition * Congruency * Alignment +
-        (cond_main + # cong_main + ali_main + 
-            cong_ali # + cond_cong + cond_ali + 
-            | Participant)); # cond_cong_ali
+        (Cond_main + # Cong_main + Ali_main + 
+            Cong_Ali # + Cond_Cong + Cond_Ali + 
+            | Participant)); # Cond_Cong_Ali
 
 lmm_rt_etd2 = fit(
     MixedModel, 
@@ -217,6 +280,17 @@ lmm_rt_opt = lmm_rt_rdc
 shrinkageplot(lmm_rt_opt)
 
 # bootstrap
-bs_rt = parametricbootstrap(MersenneTwister(42), 2000, lmm_rt_opt);
+bs_rt = parametricbootstrap(MersenneTwister(42), 4000, lmm_rt_opt);
+Arrow.write("output_jl/bs_rt.arrow", DataFrame(bs_rt.allpars))
 
-bs_rt.allpars
+bs_int = DataFrame(shortestcovint(bs_rt))
+
+# the rest analysis for RT is done in lmm_CF_jl.Rmd
+
+# design_rt = Dict(
+# 		:Alignment => ["aligned", "misaligned"],
+# 		:Congruency => ["congruent", "incongruent"],
+# 		:Condition => ["monocular", "CFS"],
+# )
+
+# preds = effects(design_rt, lmm_rt_opt)

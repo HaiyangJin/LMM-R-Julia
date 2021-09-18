@@ -1,0 +1,266 @@
+---
+title: "Generalized linear mixed-effects modeling of the composite face task"
+author: "[Haiyang Jin](https://haiyangjin.github.io/)"
+date: "`r format(Sys.time(), '%d-%m-%Y')`"
+output: 
+  html_document:
+    code_folding: hide
+    
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+```{r global_options, echo = FALSE, include = FALSE}
+options(width = 1500)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, 
+                      include = TRUE, cache = FALSE, tidy = FALSE, 
+                      size = "big", fig.width=8, fig.asp=0.7)
+xaringanExtra::use_clipboard()
+```
+
+# Preparation
+```{r setup, include=FALSE}
+library(MASS)
+library(tidyverse)
+library(arrow)
+library(tidybayes)
+```
+
+# Behavioral responses
+```{r}
+# read all the sample files
+bs_resp_files <- file.path("output_jl", list.files("output_jl", "^bs_resp_"))
+# df_samples <- sapply(bs_resp_files, read_feather, simplify = FALSE) %>% bind_rows(.id = "id") 
+
+df_resp_samples <- map_dfr(bs_resp_files, read_feather, .id = "sub") %>% 
+  mutate(sub = as.integer(sub),
+         iter = (sub-1)*max(iter) + iter) %>% 
+  select(-sub)
+```
+
+```{r}
+resp_par_list <- c("intercept", "Cond_main", "Cong_main", "Ali_main", "ans_main",
+                   "Cond_Cong", "Cond_Ali", "Cong_Ali", "Cond_ans", "Cong_ans", "Ali_ans", 
+                   "Cond_Cong_Ali", "Cond_Cong_ans", "Cond_Ali_ans", "Cong_Ali_ans",
+                   "Cond_Cong_Ali_ans")
+
+# rename variables
+df_resp_fitted <- df_resp_samples %>% 
+  filter(type == "β") %>% 
+  transmute(.iteration = iter,
+            .variable = case_when(
+              names == "(Intercept)" ~ "intercept",
+              names == "Condition: monocular" ~ "Cond_main",
+              names == "Congruency: congruent" ~ "Cong_main",
+              names == "Alignment: aligned" ~ "Ali_main",
+              names == "answer: same" ~ "ans_main",
+              names == "Condition: monocular & Congruency: congruent" ~ "Cond_Cong",
+              names == "Condition: monocular & Alignment: aligned" ~ "Cond_Ali",
+              names == "Congruency: congruent & Alignment: aligned" ~ "Cong_Ali",
+              names == "Condition: monocular & answer: same" ~ "Cond_ans",
+              names == "Congruency: congruent & answer: same" ~ "Cong_ans",
+              names == "Alignment: aligned & answer: same" ~ "Ali_ans",
+              names == "Condition: monocular & Congruency: congruent & Alignment: aligned" ~ "Cond_Cong_Ali",
+              names == "Condition: monocular & Congruency: congruent & answer: same" ~ "Cond_Cong_ans",
+              names == "Condition: monocular & Alignment: aligned & answer: same" ~ "Cond_Ali_ans",
+              names == "Congruency: congruent & Alignment: aligned & answer: same" ~ "Cong_Ali_ans",
+              names == "Condition: monocular & Congruency: congruent & Alignment: aligned & answer: same" ~ "Cond_Cong_Ali_ans"
+            ),
+            .value = value) %>% 
+  group_by(.variable) 
+
+df_resp_fitted %>%
+  mutate(.variable = factor(.variable, levels = resp_par_list)) %>% 
+  mean_hdi()
+```
+
+```{r}
+df_resp_fitted %>% 
+  mutate(.variable = factor(.variable, levels = rev(resp_par_list))) %>% 
+  ggplot(aes(y = .variable, x = .value)) +
+  stat_halfeye()
+```
+
+## Condition samples
+Calculate the sample value for each condition.
+```{r}
+df_resp_mat <- read_feather("data/example_sd.arrow") %>% 
+  select(Condition, Congruency, Alignment, answer, contains("_")) %>% 
+  distinct() %>% 
+  mutate(condname = paste(Condition, Congruency, Alignment, answer, sep = "_"))
+
+resp_design <- df_resp_mat %>% 
+  mutate(intercept = 1) %>% 
+  select(intercept, contains("_")) %>% 
+  as.matrix() %>% 
+  t()
+```
+
+```{r}
+# save samples as matrix
+sample_resp_mat <- df_resp_fitted %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = .variable, values_from = .value) %>% 
+  dplyr::select(-.iteration) %>% 
+  as.matrix()
+```
+
+```{r}
+# calculate the condition means
+cond_mean_resp <- sample_resp_mat %*% resp_design # ginv(t(ginv(design_matrix)))
+colnames(cond_mean_resp) = df_resp_mat$condname # paste0("V", 1:16)
+
+cond_mean_resp %>% as_tibble() %>% 
+  mutate(.iteration = 1:n()) %>% 
+  pivot_longer(!.iteration, names_to = ".variable", values_to = ".value") %>% 
+  group_by(.variable) %>% 
+  mean_hdi()
+```
+
+## Effects of interest
+```{r}
+df_resp_eoi <- cond_mean_resp %>% 
+  as_tibble() %>% 
+  transmute(
+    d_Cong_mono_ali = 
+      monocular_congruent_aligned_same - monocular_congruent_aligned_different -
+      (monocular_incongruent_aligned_same - monocular_incongruent_aligned_different),
+    d_Cong_CFS_ali = 
+      CFS_congruent_aligned_same - CFS_congruent_aligned_different - 
+      (CFS_incongruent_aligned_same - CFS_incongruent_aligned_different),
+    d_inter2_mono = 
+      d_Cong_mono_ali - 
+      ((monocular_congruent_misaligned_same - monocular_congruent_misaligned_different) -
+      (monocular_incongruent_misaligned_same - monocular_incongruent_misaligned_different)),
+    d_inter2_CFS = 
+      d_Cong_CFS_ali -
+      ((CFS_congruent_misaligned_same - CFS_congruent_misaligned_different) - 
+      (CFS_incongruent_misaligned_same - CFS_incongruent_misaligned_different)),
+    d_inter3 = d_inter2_mono - d_inter2_CFS
+  ) %>% 
+  mutate(.iteration = 1:n()) %>% 
+  pivot_longer(!.iteration, names_to = ".variable", values_to = ".value") %>% 
+  group_by(.variable) 
+
+df_resp_eoi %>% 
+  mean_hdi()
+```
+
+```{r}
+df_resp_eoi %>% 
+  # mutate(.variable = factor(.variable, levels = rev(resp_par_list))) %>% 
+  ggplot(aes(y = .variable, x = .value)) +
+  stat_halfeye() +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(x = "Sensitivity d'")
+```
+
+# Response times
+```{r}
+# load the sample file
+df_rt_samples <- read_feather("output_jl/bs_rt.arrow") %>% 
+  filter(type == "β") %>% 
+  transmute(.iteration = iter,
+            .variable = case_when(
+              names == "(Intercept)" ~ "intercept",
+              names == "Condition: monocular" ~ "Cond_main",
+              names == "Congruency: congruent" ~ "Cong_main",
+              names == "Alignment: aligned" ~ "Ali_main",
+              names == "Condition: monocular & Congruency: congruent" ~ "Cond_Cong",
+              names == "Condition: monocular & Alignment: aligned" ~ "Cond_Ali",
+              names == "Congruency: congruent & Alignment: aligned" ~ "Cong_Ali",
+              names == "Condition: monocular & Congruency: congruent & Alignment: aligned" ~ "Cond_Cong_Ali"
+            ),
+            .value = value) %>% 
+  group_by(.variable) 
+
+df_rt_samples %>%
+  mutate(.variable = factor(.variable, levels = resp_par_list)) %>% 
+  mean_hdi()
+```
+
+## Condition samples
+Calculate the sample value for each condition.
+```{r}
+df_rt_mat <- read_feather("data/example_sd.arrow") %>% 
+  select(!contains("Ans")) %>% 
+  select(Condition, Congruency, Alignment, contains("_")) %>% 
+  distinct() %>% 
+  mutate(condname = paste(Condition, Congruency, Alignment, sep = "_"))
+
+rt_design <- df_rt_mat %>% 
+  mutate(intercept = 1) %>% 
+  select(intercept, contains("_")) %>% 
+  as.matrix() %>% 
+  t()
+```
+
+```{r}
+# save samples as matrix
+sample_rt_mat <- df_rt_samples %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = .variable, values_from = .value) %>% 
+  dplyr::select(-.iteration) %>% 
+  as.matrix()
+```
+
+```{r}
+# calculate the condition means
+cond_mean_rt <- sample_rt_mat %*% rt_design # ginv(t(ginv(design_matrix)))
+colnames(cond_mean_rt) = df_rt_mat$condname 
+
+cond_mean_rt %>% as_tibble() %>% 
+  mutate(.iteration = 1:n()) %>% 
+  pivot_longer(!.iteration, names_to = ".variable", values_to = ".value") %>% 
+  group_by(.variable) %>% 
+  mean_hdi()
+```
+
+## Effects of interest
+```{r}
+df_rt_eoi <- cond_mean_rt %>% 
+  as_tibble() %>% 
+  transmute(
+    Cong_mono_ali = 
+      monocular_congruent_aligned - monocular_incongruent_aligned,
+    Cong_CFS_ali = 
+      CFS_congruent_aligned - CFS_incongruent_aligned,
+    inter2_mono = 
+      Cong_mono_ali - 
+      (monocular_congruent_misaligned - monocular_incongruent_misaligned),
+    inter2_CFS = 
+      Cong_CFS_ali -
+      (CFS_congruent_misaligned - CFS_incongruent_misaligned),
+    inter3 = inter2_mono - inter2_CFS
+  ) %>% 
+  mutate(.iteration = 1:n()) %>% 
+  pivot_longer(!.iteration, names_to = ".variable", values_to = ".value") %>% 
+  group_by(.variable) 
+
+df_rt_eoi %>% 
+  mean_hdi()
+```
+
+```{r}
+df_rt_eoi %>% 
+  # mutate(.variable = factor(.variable, levels = rev(resp_par_list))) %>% 
+  ggplot(aes(y = .variable, x = .value)) +
+  stat_halfeye() +
+  geom_vline(xintercept = 0, linetype = "dashed")
+```
+
+# Session information {.unlisted .unnumbered}
+```{r}
+sessionInfo()
+```

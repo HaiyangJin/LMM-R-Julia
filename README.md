@@ -39,6 +39,7 @@ The same data set was also analyzed with [MixedModels.jl](https://github.com/Jul
 
 - [lmm_CF_Pluto.jl](./lmm_CF_Pluto.jl)  
 - [lmm_CF.jl](./lmm_CF.jl)
+    - The bootstrapping samples were further anallyzed in [lmm_CF_jl.Rmd](./lmm_CF_jl.Rmd) ([output](https://haiyangjin.github.io/Mixed-Model-CF/lmm_CF_jl.html))
 
 ## emmeans
 `lmm_CF_emmeans.rmd` creates one lmm model and then uses `library(emmeans)` to examine the effects of interest.
