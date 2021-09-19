@@ -118,8 +118,8 @@ VarCorr(glmm_resp_zcp)
 # Reduced model
 f_resp_rdc = @formula(resp ~ Condition * Congruency * Alignment * answer +
 		zerocorr(Cond_main + Cong_main + Ali_main + Ans_main +
-			Cond_Ali + Cong_Ali + Cong_Ans + # Ali_Ans + Cond_Ans + Cond_Cong + 
-			Cong_Ali_Ans # + Cond_Ali_Ans + Cond_Cong_Ans + Cond_Cong_Ali + 
+			Cond_Ali + Cong_Ans + Ali_Ans + Cond_Ans + # Cond_Cong + Cong_Ali + 
+			Cong_Ali_Ans + Cond_Cong_Ali  # + Cond_Ali_Ans + Cond_Cong_Ans + 
 			| Participant)); # Cond_Cong_Ali_Ans
 	
 glmm_resp_rdc = fit(
@@ -134,10 +134,10 @@ issingular(glmm_resp_rdc)
 
 # Extended model
 f_resp_etd = @formula(resp ~ Condition * Congruency * Alignment * answer +
-        (Cond_main + Cong_main + Ali_main + Ans_main +
-            Cond_Ali + Cong_Ali + Cong_Ans + # Ali_Ans + Cond_Ans + Cond_Cong + 
-            Cong_Ali_Ans # + Cond_Ali_Ans + Cond_Cong_Ans + Cond_Cong_Ali + 
-            | Participant)); # Cond_Cong_Ali_Ans
+		(Cond_main + Cong_main + Ali_main + Ans_main +
+			Cond_Ali + Cong_Ans + Ali_Ans + Cond_Ans + # Cond_Cong + Cong_Ali + 
+			Cong_Ali_Ans + Cond_Cong_Ali  # + Cond_Ali_Ans + Cond_Cong_Ans + 
+			| Participant)); # Cond_Cong_Ali_Ans
 	
 glmm_resp_etd = fit(
     MixedModel, 
@@ -149,12 +149,52 @@ glmm_resp_etd = fit(
 
 issingular(glmm_resp_etd)
 
-# Optimal model
-MixedModels.likelihoodratiotest(glmm_resp_etd, glmm_resp_rdc)
+glmm_resp_etd.rePCA
+VarCorr(glmm_resp_etd)
 
-mods = [glmm_resp_etd, glmm_resp_rdc];
+# Extended model 2
+f_resp_etd2 = @formula(resp ~ Condition * Congruency * Alignment * answer +
+		(Ans_main + # # Cong_main + Ali_main + Cond_main + 
+			Cond_Ans + # Cond_Cong + Cong_Ali + # Cong_Ans + Ali_Ans + Cond_Ali + 
+			Cong_Ali_Ans + Cond_Cong_Ali  # + Cond_Ali_Ans + Cond_Cong_Ans + 
+			| Participant)); # Cond_Cong_Ali_Ans
+	
+glmm_resp_etd2 = fit(
+    MixedModel, 
+    f_resp_etd2, 
+    df_lmm,
+    Bernoulli(),
+    ProbitLink(),
+    contrasts = contr)
+
+issingular(glmm_resp_etd2)
+
+glmm_resp_etd2.rePCA
+VarCorr(glmm_resp_etd2)
+
+# Extended model 3
+f_resp_etd3 = @formula(resp ~ Condition * Congruency * Alignment * answer +
+		(0 + Ans_main + # # Cong_main + Ali_main + Cond_main + 
+			Cond_Ans + # Cond_Cong + Cong_Ali + # Cong_Ans + Ali_Ans + Cond_Ali + 
+			Cong_Ali_Ans   # + Cond_Ali_Ans + Cond_Cong_Ans + + Cond_Cong_Ali
+			| Participant)); # Cond_Cong_Ali_Ans
+	
+glmm_resp_etd3 = fit(
+    MixedModel, 
+    f_resp_etd3, 
+    df_lmm,
+    Bernoulli(),
+    ProbitLink(),
+    contrasts = contr)
+
+issingular(glmm_resp_etd3)
+
+# Optimal model
+MixedModels.likelihoodratiotest(glmm_resp_etd3, glmm_resp_rdc)
+
+mods = [glmm_resp_etd3, glmm_resp_rdc];
 DataFrame(
-    model = [:glmm_resp_etd, :glmm_resp_rdc],
+    model = [:glmm_resp_etd3, :glmm_resp_rdc],
     npar = dof.(mods),
     deviance = deviance.(mods),
     AIC = aic.(mods),
@@ -166,8 +206,8 @@ DataFrame(
 glmm_resp_opt = glmm_resp_rdc 
 
 # bootstrap (save multiple files)
-# this loops took more than 10 hours
-# for i in 1:10
+# this loops took more than 20 hours
+# for i in 8:10
 #     bs_resp = parametricbootstrap(MersenneTwister(42+i), 400, glmm_resp_opt)
 #     Arrow.write(@sprintf("output_jl/bs_resp_%d.arrow", i), DataFrame(bs_resp.allpars))
 # end
@@ -219,7 +259,7 @@ VarCorr(lmm_rt_zcp)
 # Reduced model
 f_rt_rdc = @formula(logRT ~ Condition * Congruency * Alignment +
 		zerocorr(Cond_main + # Cong_main + Ali_main + 
-			Cond_Ali + Cong_Ali # + Cond_Cong + 
+        Cond_Ali # + Cond_Cong + Cong_Ali + 
 			| Participant)); # Cond_Cong_Ali
 	
 lmm_rt_rdc = fit(
@@ -233,7 +273,7 @@ issingular(lmm_rt_rdc)
 # Extended model
 f_rt_etd = @formula(logRT ~ Condition * Congruency * Alignment +
         (Cond_main + # Cong_main + Ali_main + 
-            Cond_Ali + Cong_Ali # + Cond_Cong + 
+        Cond_Ali # + Cond_Cong + Cong_Ali + 
             | Participant)); # Cond_Cong_Ali
 
 lmm_rt_etd = fit(
@@ -249,8 +289,8 @@ VarCorr(lmm_rt_etd)
 
 # Extended model 2
 f_rt_etd2 = @formula(logRT ~ Condition * Congruency * Alignment +
-        (Cond_main + # Cong_main + Ali_main + 
-            Cong_Ali # + Cond_Cong + Cond_Ali + 
+        (Cond_main # Cong_main + Ali_main + 
+             # + Cond_Cong + Cond_Ali + Cong_Ali
             | Participant)); # Cond_Cong_Ali
 
 lmm_rt_etd2 = fit(
